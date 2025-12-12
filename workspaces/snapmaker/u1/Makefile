@@ -3,7 +3,7 @@ FIRMWARE_VERSION=0.0.9
 FW_BASE := artifacts/$(FIRMWARE_VERSION)
 UPDATE_IMG=$(FW_BASE)-upgrade.d/update.img
 
-all: outputs/moonraker.tar outputs/klipper.tar
+extract: outputs/moonraker.tar outputs/klipper.tar
 
 UPFILE_NAMES=at32f403a.bin at32f415.bin MCU_DESC update.img UPFILE_BUILD_DATE UPFILE_VERSION
 
@@ -62,4 +62,4 @@ UPFILE=$(UPFILE_DIR)/bin/upfile
 $(UPFILE)/bin/upfile:
 	make -C $(UPFILE_DIR)
 
-.PHONY: all container
+.PHONY: extract container
