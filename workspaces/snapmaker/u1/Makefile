@@ -1,41 +1,43 @@
 FIRMWARE_VERSION=0.0.9
 
-UPDATE_IMG=artifacts/$(FIRMWARE_VERSION)-upgrade.d/update.img
+FW_BASE := artifacts/$(FIRMWARE_VERSION)
+UPDATE_IMG=$(FW_BASE)-upgrade.d/update.img
 
 all: outputs/moonraker.tar outputs/klipper.tar
 
 UPFILE_NAMES=at32f403a.bin at32f415.bin MCU_DESC update.img UPFILE_BUILD_DATE UPFILE_VERSION
 
+
 %: %.url
 	curl --fail -l -'#' -o "$@" "$(file < $<)"
 
-$(foreach f,$(UPFILE_NAMES),artifacts/%-upgrade.d/$f) &: artifacts/%-upgrade.bin
+$(foreach f,$(UPFILE_NAMES),$(FW_BASE)-upgrade.d/$f) &: artifacts/$(FIRMWARE_VERSION)-upgrade.bin
 	[[ -d $(dir $@) ]] || mkdir $(dir $@)
 	$(UPFILE) unpack $< $(dir $@)
 
-artifacts/$(FIRMWARE_VERSION)-rk.d/update.img: artifacts/$(FIRMWARE_VERSION)-upgrade.d/update.img 
+$(FW_BASE)-rk.d/update.img: $(FW_BASE)-upgrade.d/update.img 
 	[[ -d $(dir $@) ]] || mkdir $(dir $@)
 	$(IMG_UNPACK) $< $(dir $@)
 
-artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img: artifacts/$(FIRMWARE_VERSION)-rk.d/update.img
+$(FW_BASE)-afp.d/rootfs.img: $(FW_BASE)-rk.d/update.img
 	[[ -d $(dir $@) ]] || mkdir $(dir $@)
 	$(AFPTOOL) -unpack $< $(dir $@)
 
 # TODO: rewrite these to use virt-tar-out
-outputs/klipper.tar: artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img
+outputs/klipper.tar: $(FW_BASE)-afp.d/rootfs.img
 	$(eval tempdir = $(shell mktemp -d))
 	unsquashfs -dest "$(tempdir)" "$<" home/lava/klipper
 	tar -cf "$@" -C"$(tempdir)"/home/lava klipper
 	rm -rf "$(tempdir)"
 
 
-outputs/moonraker.tar: artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img
+outputs/moonraker.tar: $(FW_BASE)-afp.d/rootfs.img
 	$(eval tempdir = $(shell mktemp -d))
 	unsquashfs -dest "$(tempdir)" "$<" home/lava/moonraker
 	tar -cf "$@" -C"$(tempdir)"/home/lava moonraker
 	rm -rf "$(tempdir)"
 
-outputs/rootfs.tar: artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img
+outputs/rootfs.tar: $(FW_BASE)-afp.d/rootfs.img
 	virt-tar-out -a $< / $@
 
 CONTAINER=snapmaker-u1:$(FIRMWARE_VERSION)
