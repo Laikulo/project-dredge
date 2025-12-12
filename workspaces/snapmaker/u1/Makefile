@@ -6,8 +6,6 @@ all: outputs/moonraker.tar outputs/klipper.tar
 
 UPFILE_NAMES=at32f403a.bin at32f415.bin MCU_DESC update.img UPFILE_BUILD_DATE UPFILE_VERSION
 
-get-fw: artifacts/$(FIRMWARE_VERSION)-upgrade.bin
-
 %: %.url
 	curl --fail -l -'#' -o "$@" "$(file < $<)"
 
@@ -23,6 +21,7 @@ artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img: artifacts/$(FIRMWARE_VERSION)-rk
 	[[ -d $(dir $@) ]] || mkdir $(dir $@)
 	$(AFPTOOL) -unpack $< $(dir $@)
 
+# TODO: rewrite these to use virt-tar-out
 outputs/klipper.tar: artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img
 	$(eval tempdir = $(shell mktemp -d))
 	unsquashfs -dest "$(tempdir)" "$<" home/lava/klipper
@@ -36,6 +35,19 @@ outputs/moonraker.tar: artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img
 	tar -cf "$@" -C"$(tempdir)"/home/lava moonraker
 	rm -rf "$(tempdir)"
 
+outputs/rootfs.tar: artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img
+	virt-tar-out -a $< / $@
+
+CONTAINER=snapmaker-u1:$(FIRMWARE_VERSION)
+container: outputs/rootfs.tar
+	podman import --arch aarch64 \
+		-c 'ENTRYPOINT ["/bin/sh", "-c"]' \
+		-c 'CMD ["bash"]' \
+		-c 'WORKDIR /home/lava' \
+		-m "Project Dredge" \
+		$< $(CONTAINER)
+	
+
 # TODO: Consider making a lib function for this
 RK2918_DIR=../../../vendor/rk2918_tools
 IMG_UNPACK=$(RK2918_DIR)/bin/img_unpack
@@ -47,3 +59,5 @@ UPFILE_DIR=../../../vendor/upfile
 UPFILE=$(UPFILE_DIR)/bin/upfile
 $(UPFILE)/bin/upfile:
 	make -C $(UPFILE_DIR)
+
+.PHONY: all container
