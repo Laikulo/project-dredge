@@ -1,11 +1,10 @@
 FIRMWARE_VERSION=0.0.9
 
 UPDATE_IMG=artifacts/$(FIRMWARE_VERSION)-upgrade.d/update.img
-all: $(UPDATE_IMG)
+
+all: outputs/moonraker.tar outputs/klipper.tar
 
 UPFILE_NAMES=at32f403a.bin at32f415.bin MCU_DESC update.img UPFILE_BUILD_DATE UPFILE_VERSION
-
-
 
 get-fw: artifacts/$(FIRMWARE_VERSION)-upgrade.bin
 
@@ -20,11 +19,22 @@ artifacts/$(FIRMWARE_VERSION)-rk.d/update.img: artifacts/$(FIRMWARE_VERSION)-upg
 	[[ -d $(dir $@) ]] || mkdir $(dir $@)
 	$(IMG_UNPACK) $< $(dir $@)
 
-artifacts/$(FIRMWARE_VERSION)-afp.d/foobar.img: artifacts/$(FIRMWARE_VERSION)-rk.d/update.img
+artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img: artifacts/$(FIRMWARE_VERSION)-rk.d/update.img
 	[[ -d $(dir $@) ]] || mkdir $(dir $@)
 	$(AFPTOOL) -unpack $< $(dir $@)
 
+outputs/klipper.tar: artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img
+	$(eval tempdir = $(shell mktemp -d))
+	unsquashfs -dest "$(tempdir)" "$<" home/lava/klipper
+	tar -cf "$@" -C"$(tempdir)"/home/lava klipper
+	rm -rf "$(tempdir)"
 
+
+outputs/moonraker.tar: artifacts/$(FIRMWARE_VERSION)-afp.d/rootfs.img
+	$(eval tempdir = $(shell mktemp -d))
+	unsquashfs -dest "$(tempdir)" "$<" home/lava/moonraker
+	tar -cf "$@" -C"$(tempdir)"/home/lava moonraker
+	rm -rf "$(tempdir)"
 
 # TODO: Consider making a lib function for this
 RK2918_DIR=../../../vendor/rk2918_tools
