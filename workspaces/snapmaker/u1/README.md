@@ -9,7 +9,7 @@ Firmware releases: https://wiki.snapmaker.com/en/snapmaker\_u1/firmware/release\
 ## System Description
 
 Uses an android-ish A/B boot process, and a buildroot-based filesystem. Android-esque /oem, /vendor, /userdata, and similar are present.  
-The root is rendered writable by overlying with /userdata, but unless the "debug" flag is set, this overlay is cleared on boot.
+The root is rendered writable by overlying with /oem/overlay, but unless the "debug" flag is set (/oem/.debug), this overlay is cleared on boot.
 
 The UI is drawn by a compiled binary named `gui` in the app user's home, which contains LVGL, and writes to the framebuffer directly, as well as does houskeeping tasks.
 
