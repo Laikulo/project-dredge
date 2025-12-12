@@ -1,6 +1,6 @@
-SOURCE_TARBALL=https://github.com/dayongxie/rk2918_tools/archive/refs/heads/master.tar.gz
+SOURCE_TARBALL=https://github.com/crosstyan/rk2918_tools/archive/refs/heads/master.tar.gz
 
-bins := img_unpack
+bins := img_unpack afptool
 
 all: $(foreach f,$(bins),bin/$f)
 
