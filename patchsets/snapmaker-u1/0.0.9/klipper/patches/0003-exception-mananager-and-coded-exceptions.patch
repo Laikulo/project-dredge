@@ -1,0 +1,1513 @@
+--- /dev/null
++++ b/klippy/coded_exception.py
+@@ -0,0 +1,80 @@
++DEFAULT_ACTION = 'cancel'
++DEFAULT_MESSAGE = 'class CodedException'
++DEFAULT_ID = 522
++DEFAULT_INDEX = 0
++DEFAULT_CODE = 0
++DEFAULT_ONESHOT = 1
++DEFAULT_LEVEL = 3
++DEFAULT_PERSISTENT = 0
++DEFAULT_PROACTIVE_REPORT = 1
++
++class CodedException(Exception):
++    default_action = DEFAULT_ACTION
++    default_id = DEFAULT_ID
++    default_index = DEFAULT_INDEX
++    default_code = DEFAULT_CODE
++    default_message = DEFAULT_MESSAGE
++    default_oneshot = DEFAULT_ONESHOT
++    default_level = DEFAULT_LEVEL
++    default_persistent = DEFAULT_PERSISTENT
++    default_proactive_report = DEFAULT_PROACTIVE_REPORT
++
++    def __init__(
++        self,
++        message: str = default_message,
++        action: str = default_action,
++        id: int = default_id,
++        index: int = default_index,
++        code: int = default_code,
++        oneshot: int = default_oneshot,
++        level: int = default_level,
++        is_persistent: int = default_persistent,
++        proactive_report: int = default_proactive_report,
++    ):
++        self.id = id
++        self.index = index
++        self.code = code
++        self.oneshot = oneshot
++        self.message = message
++        self.action = action
++        self.level = level
++        self.is_persistent = is_persistent
++        self.proactive_report = proactive_report
++
++        super().__init__(message)
++
++
++    def to_dict(self) -> dict:
++        # Dynamically generate dictionary from instance attributes
++        return {key: getattr(self, key) for key in self.__dict__ if not key.startswith("_")}
++
++    def structured_code(self) -> str:
++        return f"{self.level:04d}-{self.id:04d}-{self.index:04d}-{self.code:04d}"
++
++    def basic_structured_code(self) -> str:
++        return f"{self.id:04d}-{self.index:04d}-{self.code:04d}"
++
++    @classmethod
++    def from_exception(cls, exc: Exception, **kwargs):
++        if not isinstance(exc, Exception):
++            raise TypeError("Input must be an instance of Exception")
++
++        if isinstance(exc, cls):
++            for key, value in kwargs.items():
++                if hasattr(exc, key):
++                    setattr(exc, key, value)
++            return exc
++
++        new_exc = cls(
++            message=kwargs.get("message", str(exc)),
++            action=kwargs.get("action", cls.default_action),
++            id=kwargs.get("id", cls.default_id),
++            index=kwargs.get("index", cls.default_index),
++            code=kwargs.get("code", cls.default_code),
++            oneshot=kwargs.get("oneshot", cls.default_oneshot),
++            level=kwargs.get("level", cls.default_level),
++            is_persistent=kwargs.get("is_persistent", cls.default_persistent),
++            proactive_report=kwargs.get("proactive_report", cls.default_proactive_report),
++        )
++        new_exc.__cause__ = exc
++        return new_exc
+--- a/klippy/configfile.py
++++ b/klippy/configfile.py
+@@ -4,14 +4,18 @@
+ #
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+ import sys, os, glob, re, time, logging, configparser, io
++from coded_exception import CodedException
+ 
+-error = configparser.Error
++class ConfigError(CodedException, configparser.Error):
++    pass
++
++error = ConfigError
+ 
+ class sentinel:
+     pass
+ 
+ class ConfigWrapper:
+-    error = configparser.Error
++    error = ConfigError
+     def __init__(self, printer, fileconfig, access_tracking, section):
+         self.printer = printer
+         self.fileconfig = fileconfig
+new file mode 100644
+--- /dev/null
++++ b/klippy/exception_manager.py
+@@ -0,0 +1,339 @@
++# exception manager for klippy
++#
++# Copyright (C) 2025-2030  Scott Huang <shili.huang@snapmaker.com>
++#
++# This file may be distributed under the terms of the GNU GPLv3 license.
++
++import logging, os, json, copy, queuefile
++
++EXCEPTION_PERSISTENT_FILE = 'exception_persistent.json'
++
++class ExceptionList:
++    MODULE_ID_MOTION    = 522
++    MODULE_ID_TOOLHEAD  = 523
++    MODULE_ID_CAMERA    = 524
++    MODULE_ID_FEEDING   = 525
++    MODULE_ID_SYSTEM    = 2052
++
++    # TOOLHEAD
++    CODE_TOOLHEAD_FILAMENT_RUNOUT = 0
++
++    # FEEDING
++    CODE_FEEDING_GENERIC                    = 0
++    CODE_FEEDING_MOTOR_SPEED                = 1
++    CODE_FEEDING_WHEEL_SPEED                = 2
++    CODE_FEEDING_NO_FILAMENT                = 3
++
++    def __init__(self):
++        pass
++
++class ExceptionManager:
++    def __init__(self, printer):
++        self.printer = printer
++        self.reactor = self.printer.get_reactor()
++        self.gcode = self.printer.lookup_object('gcode')
++        self.webhooks = self.printer.lookup_object('webhooks')
++
++        config_dir = self.printer.get_snapmaker_config_dir()
++        self.exception_file_path = os.path.join(config_dir, EXCEPTION_PERSISTENT_FILE)
++        self.allow_moonraker_throw = False
++
++        self.exceptions = []
++        self.reported_exceptions = []
++        self.async_exceptions = []
++        self.list = ExceptionList()
++
++        self.file_lock = self.reactor.mutex()
++
++        persistent_exceptions = self._load_persistent_exceptions()
++        for key, exception_data in persistent_exceptions.items():
++            parsed = self._parse_basic_code(key)
++            if parsed:
++                self.exceptions.append({
++                    'id': parsed['id'],
++                    'index': parsed['index'],
++                    'code': parsed['code'],
++                    'level': exception_data['level'],
++                    'message': exception_data['message']
++                })
++
++        self.gcode.register_command('RAISE_EXCEPTION', self.cmd_RAISE_EXCEPTION)
++        self.gcode.register_command('CLEAR_EXCEPTION', self.cmd_CLEAR_EXCEPTION)
++        self.gcode.register_command('QUERY_EXCEPTION', self.cmd_QUERY_EXCEPTION)
++        self.gcode.register_command('RM_EXCEPTION_PERSISTENT_FILE', self.cmd_RM_EXCEPTION_PERSISTENT_FILE)
++
++        self.async_handle_timer = self.reactor.register_timer(self._handle_async_exception)
++        self.allow_throw_check_timer = self.reactor.register_timer(self._allow_moonraker_throw_check, self.reactor.NOW)
++
++    def _allow_moonraker_throw_check(self, eventtime):
++        if not self.allow_moonraker_throw:
++            self.allow_moonraker_throw = self.webhooks.has_remote_method('raise_exception')
++            return eventtime + 1
++        logging.info("Moonraker throw is already allowed.")
++        return self.reactor.NEVER
++
++    @staticmethod
++    def _parse_basic_code(coded_string):
++        try:
++            parts = coded_string.split('-')
++            if len(parts) != 3:
++                logging.warning(f"Expected 3-part format without level, got: {coded_string}")
++                return None
++            return {
++                "id": int(parts[0]),
++                "index": int(parts[1]),
++                "code": int(parts[2])
++            }
++        except ValueError as e:
++            logging.exception(f"Failed to parse basic_code string: {coded_string}")
++            return None
++
++    @staticmethod
++    def _parse_structured_code(coded_string):
++        try:
++            parts = coded_string.split('-')
++            if len(parts) != 4:
++                logging.warning(f"Expected 4-part format, got: {coded_string}")
++                return None
++            return {
++                "level": int(parts[0]),
++                "id": int(parts[1]),
++                "index": int(parts[2]),
++                "code": int(parts[3])
++            }
++        except ValueError as e:
++            logging.exception(f"Failed to parse structured_coded string: {coded_string}")
++            return None
++
++    def _validate_coded_key(self, key):
++        if not key.replace('-', '').isdigit():
++            logging.warning(f"Invalid key contains non-digit characters: {key}")
++            return False
++
++        parsed = self._parse_basic_code(key)
++        if parsed is None:
++            return False
++
++        return True
++
++    def _load_persistent_exceptions(self):
++        if not os.path.exists(self.exception_file_path):
++            return {}
++
++        try:
++            with open(self.exception_file_path, 'r') as f:
++                raw_data = json.load(f)
++
++            valid_data = {}
++            invalid_entries = []
++
++            for key, value in raw_data.items():
++                if not self._validate_coded_key(key):
++                    invalid_entries.append(f"Invalid coded key: {key}")
++                    continue
++
++                if not isinstance(value, dict):
++                    invalid_entries.append(f"Value must be dict for key: {key}")
++                    continue
++
++                if 'level' not in value:
++                    invalid_entries.append(f"Missing/invalid level for key: {key}")
++                    continue
++
++                if 'message' not in value:
++                    invalid_entries.append(f"Missing/invalid message for key: {key}")
++                    continue
++
++                valid_data[key] = value
++
++            if invalid_entries:
++                logging.warning(f"Found {len(invalid_entries)} invalid entries:\n" +
++                            "\n".join(invalid_entries))
++
++            return valid_data
++
++        except Exception as e:
++            logging.error(f"Error loading persistent exceptions: {str(e)}")
++            return {}
++
++    def save_persistent_exception(self, coded_code, level, message):
++        if not self._validate_coded_key(coded_code):
++            logging.error(f"Invalid coded_code format: {coded_code}")
++            return False
++
++        data = self._load_persistent_exceptions()
++        if coded_code in data and data[coded_code]['message'] == message and data[coded_code]['level'] == level:
++            logging.warning(f"Exception with coded_code {coded_code} already exists in persistent storage.")
++            return True  # Already exists
++        data[coded_code] = {'level': level, 'message': message}
++        try:
++            json_content = json.dumps(data, indent=4)
++            queuefile.async_write_file(self.exception_file_path, json_content, safe_write=True)
++            return True
++        except Exception as e:
++            logging.error(f"Error saving persistent exception: {str(e)}")
++            return False
++
++    def clear_persistent_exception(self, coded_code):
++        if not self._validate_coded_key(coded_code):
++            logging.error(f"Invalid coded_code format: {coded_code}")
++            return False
++
++        data = self._load_persistent_exceptions()
++        if coded_code not in data:
++            # logging.warning(f"Exception with coded_code {coded_code} does not exist in persistent storage.")
++            return False
++
++        del data[coded_code]
++        logging.info(f"Clearing persistent exception: {coded_code}")
++        try:
++            json_content = json.dumps(data, indent=4)
++            queuefile.async_write_file(self.exception_file_path, json_content, safe_write=True)
++            return True
++        except Exception as e:
++            logging.error(f"Error clearing persistent exception: {str(e)}")
++            return False
++
++    def remove_persistent_exceptions(self):
++        if not os.path.exists(self.exception_file_path):
++            return False
++        try:
++            queuefile.async_delete_file(self.exception_file_path)
++            return True
++        except Exception as e:
++            logging.error(f"Error removing persistent exceptions: {str(e)}")
++            return False
++
++    def _handle_async_exception(self, eventtime):
++        # got one exception from queue to raise it to moonraker
++        # must be attention to the order of exceptions
++        id, index, code, message, oneshot, level, is_persistent = self.async_exceptions.pop(0)
++        self.raise_exception(id, index, code, message, oneshot, level, is_persistent)
++        if len(self.async_exceptions) > 0:
++            return eventtime + 0.001
++        return self.reactor.NEVER
++
++    def is_allowed_to_throw_to_moonraker(self):
++        return self.allow_moonraker_throw
++
++    def raise_exception_async(self, id, index, code, message, oneshot=1, level=None, is_persistent=0, action=None):
++        action_levels = {
++            'none': 1,
++            'pause': 2,
++            'pause_runout': 2,
++            'cancel': 3
++        }
++        level = level if level is not None else action_levels.get(action, 3)
++        self.async_exceptions.append((id, index, code, message, oneshot, level, is_persistent))
++        self.reactor.update_timer(self.async_handle_timer, self.reactor.NOW)
++
++    def raise_exception(self, id, index, code, message, oneshot=1, level=3, is_persistent=0):
++        if not oneshot:
++            duplicate, updated = False, False
++            # cache = {'id': id, 'index': index, 'code': code, 'level': level, 'message': message}
++            for e in self.exceptions:
++                try:
++                    if (e['id'] == id and e['index'] == index and e['code'] == code):
++                        if e['level'] == level and e['message'] == message:
++                            duplicate = True
++                        else:
++                            e.update({'level': level, 'message': message})
++                            updated = True
++                        break
++                except KeyError:
++                    continue
++
++            if not duplicate and not updated:
++                self.exceptions.append({
++                    'id': id, 'index': index, 'code': code,
++                    'level': level, 'message': message
++                })
++
++            if is_persistent:
++                if not self.save_persistent_exception(f"{id:04d}-{index:04d}-{code:04d}", level, message):
++                    logging.error(f"Failed to save persistent exception: {message}")
++
++        logging.info(f"Raising exception: id:{id} index:{index} code:{code} oneshot:{oneshot} level:{level} is_persistent:{is_persistent}, message: {message}")
++
++        if self.is_allowed_to_throw_to_moonraker():
++            try:
++                self.webhooks.call_remote_method('raise_exception', id=id, index=index,
++                                                code=code, message=message, oneshot=oneshot, level=level)
++            except self.printer.command_error:
++                logging.exception("moonraker didn't response remote method: raise_exception")
++    # TODO: Integrate this logic into the _handle_async_exception function for centralized exception handling
++    def clear_exception(self, id, index, code, gcmd=None):
++        excep = {'id': id, 'index': index, 'code': code}
++
++        to_remove = [ex for ex in self.exceptions
++                    if all(ex.get(k) == v for k, v in excep.items())]
++
++        if to_remove:
++            for ex in to_remove:
++                self.exceptions.remove(ex)
++                self.clear_persistent_exception(f"{id:04d}-{index:04d}-{code:04d}")
++
++        self.clear_persistent_exception(f"{id:04d}-{index:04d}-{code:04d}")
++
++        if self.is_allowed_to_throw_to_moonraker():
++            try:
++                self.webhooks.call_remote_method('clear_exception', id=id, index=index, code=code)
++            except self.printer.command_error:
++                logging.exception("moonraker didn't response remote method: clear_exception")
++        # else:
++        #     logging.error("can only clear motion and toolhead exception on moonraker")
++        if to_remove:
++            logging.info(f'exception cleared: id:{id} index:{index} code:{code}')
++
++        if gcmd and to_remove:
++            gcmd.respond_raw(f'exception cleared: id:{id} index:{index} code:{code}')
++
++    def get_status(self, eventtime):
++        if self.reported_exceptions != self.exceptions:
++            self.reported_exceptions = copy.deepcopy(self.exceptions)
++        return {'exceptions': self.reported_exceptions}
++
++    def cmd_RAISE_EXCEPTION(self, gcmd):
++        id = gcmd.get_int('ID', self.list.MODULE_ID_MOTION)
++        index = gcmd.get_int('INDEX')
++        code = gcmd.get_int('CODE')
++        oneshot = gcmd.get_int('ONESHOT', 1)
++        level = gcmd.get_int('LEVEL', 3)
++        is_persistent = gcmd.get_int('IS_PERSISTENT', 0)
++        message = gcmd.get('MSG', None)
++        if message is None:
++            message = f'exception id:{id} index:{index} code:{code} oneshot:{oneshot} level:{level} is_persistent:{is_persistent}'
++        self.raise_exception(id, index, code, message, oneshot, level, is_persistent)
++        gcmd.respond_raw(message)
++
++    def cmd_CLEAR_EXCEPTION(self, gcmd):
++        id = gcmd.get_int('ID')
++        index = gcmd.get_int('INDEX')
++        code = gcmd.get_int('CODE')
++        self.clear_exception(id, index, code, gcmd)
++        # gcmd.respond_info(f'clear exception id:{id} index:{index} code:{code}')
++
++    def cmd_QUERY_EXCEPTION(self, gcmd):
++        for e in self.exceptions:
++            gcmd.respond_info(f"{e['level']:04d}-{e['id']:04d}-{e['index']:04d}-{e['code']:04d}, message: {e['message']}")
++
++    def cmd_RM_EXCEPTION_PERSISTENT_FILE(self, gcmd):
++        persistent_exceptions = self._load_persistent_exceptions()
++        exceptions = []
++        for key, exception_data in persistent_exceptions.items():
++            parsed = self._parse_basic_code(key)
++            if parsed:
++                exceptions.append({
++                    'id': parsed['id'],
++                    'index': parsed['index'],
++                    'code': parsed['code'],
++                    'level': exception_data['level'],
++                    'message': exception_data['message']
++                })
++        logging.info(f"Removing persistent exceptions: {len(exceptions)} found")
++        for e in exceptions:
++            self.clear_exception(e['id'], e['index'], e['code'])
++        self.remove_persistent_exceptions()
++
++def add_early_printer_objects(printer):
++    printer.add_object('exception_manager', ExceptionManager(printer))
+--- a/klippy/extras/error_mcu.py
++++ b/klippy/extras/error_mcu.py
+@@ -3,7 +3,7 @@
+ # Copyright (C) 2024  Kevin O'Connor <kevin@koconnor.net>
+ #
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+-import logging
++import logging, json
+ 
+ message_shutdown = """
+ Once the underlying issue is corrected, use the
+@@ -87,6 +87,46 @@ class PrinterMCUError:
+         # Update error message
+         newmsg = "%s%s%s%s%s" % (prefix, mcu_msg, clarify_msg,
+                                  hint, message_shutdown)
++        if 'ADC out of range' in newmsg:
++            import re
++            heater_index = 0
++            found_heater = None
++            heater_type = "unknown"
++
++            extruder_match = re.search(r"'(extruder\d*)'", newmsg)
++            if extruder_match:
++                found_heater = extruder_match.group(1)
++                extruder_num = found_heater.replace('extruder', '')
++                if extruder_num == '':
++                    heater_index = 0
++                else:
++                    heater_index = int(extruder_num)
++                heater_type = "extruder"
++            elif "'heater_bed'" in newmsg:
++                heater_type = "heater_bed"
++            elif "'temperature_sensor cavity'" in newmsg:
++                heater_type = "temperature_sensor"
++
++            if heater_type == "heater_bed":
++                id, index, code = 526, 0, 0
++            elif heater_type == "temperature_sensor":
++                id, index, code = 527, 0, 0
++            elif heater_type == "unknown":
++                id, index, code = 522, 0, 14
++            else:
++                id, index, code = 523, heater_index, 2
++            coded, oneshot, is_persistent = f"0003-{id:04d}-{index:04d}-{code:04d}", 0, 0
++            err_msg = json.dumps({
++                "coded": coded,
++                "oneshot": oneshot,
++                "msg": clarify_msg
++            })
++            # err_msg = '{"coded":"%s", "oneshot": %d, "msg": "%s"}' % (coded, oneshot, "ADC out of range")
++            newmsg = "%s\n%s" % (err_msg, newmsg)
++            self.printer.raise_structured_code_exception(coded, clarify_msg, oneshot, is_persistent)
++            self.printer.set_extruder_power('off')
++        elif msg and msg.startswith('{"coded"'):
++            newmsg = "%s\n%s" % (msg, newmsg)
+         self.printer.update_error_msg(msg, newmsg)
+     def _handle_notify_mcu_shutdown(self, msg, details):
+         if msg == "MCU shutdown":
+@@ -119,14 +159,20 @@ class PrinterMCUError:
+                   "MCU(s) which should be updated:"]
+         newmsg += msg_update + ["Up-to-date MCU(s):"] + msg_updated
+         newmsg += [message_protocol_error2, details['error']]
++        if msg and (msg.startswith('{"coded"') or msg.startswith("{'coded'")):
++            newmsg = [msg + "\n"] + newmsg
+         self.printer.update_error_msg(msg, "\n".join(newmsg))
+     def _check_mcu_connect_error(self, msg, details):
+         newmsg = "%s%s" % (details['error'], message_mcu_connect_error)
++        if msg and (msg.startswith('{"coded"') or msg.startswith("{'coded'")):
++            newmsg = "%s\n%s" % (msg, newmsg)
+         self.printer.update_error_msg(msg, newmsg)
+     def _handle_notify_mcu_error(self, msg, details):
+-        if msg == "Protocol error":
++        # if msg == "Protocol error":
++        if "Protocol error" in msg:
+             self._check_protocol_error(msg, details)
+-        elif msg == "MCU error during connect":
++        # elif msg == "MCU error during connect":
++        elif msg and "MCU error during connect" in msg:
+             self._check_mcu_connect_error(msg, details)
+ 
+ def load_config(config):
+--- a/klippy/extras/gcode_arcs.py
++++ b/klippy/extras/gcode_arcs.py
+@@ -62,7 +62,9 @@ class ArcSupport:
+     def _cmd_inner(self, gcmd, clockwise):
+         gcodestatus = self.gcode_move.get_status()
+         if not gcodestatus['absolute_coordinates']:
+-            raise gcmd.error("G2/G3 does not support relative move mode")
++            error = '{"coded": "0003-0529-0000-0010", "msg":"%s"}' % ("G2/G3 does not support relative move mode")
++            raise gcmd.error(error)
++            # raise gcmd.error("G2/G3 does not support relative move mode")
+         currentPos = gcodestatus['gcode_position']
+ 
+         # Parse parameters
+@@ -72,7 +74,9 @@ class ArcSupport:
+                               e=None)
+ 
+         if gcmd.get_float("R", None) is not None:
+-            raise gcmd.error("G2/G3 does not support R moves")
++            error = '{"coded": "0003-0529-0000-0011", "msg":"%s"}' % ("G2/G3 does not support R moves")
++            raise gcmd.error(error)
++            # raise gcmd.error("G2/G3 does not support R moves")
+ 
+         # determine the plane coordinates and the helical axis
+         asPlanar = [ gcmd.get_float(a, 0.) for i,a in enumerate('IJ') ]
+@@ -85,7 +89,9 @@ class ArcSupport:
+             axes = (Y_AXIS, Z_AXIS, X_AXIS)
+ 
+         if not (asPlanar[0] or asPlanar[1]):
+-            raise gcmd.error("G2/G3 requires IJ, IK or JK parameters")
++            error = '{"coded": "0003-0529-0000-0012", "msg":"%s"}' % ("G2/G3 requires IJ, IK or JK parameters")
++            raise gcmd.error(error)
++            # raise gcmd.error("G2/G3 requires IJ, IK or JK parameters")
+ 
+         asE = gcmd.get_float("E", None)
+         asF = gcmd.get_float("F", None)
+--- a/klippy/extras/heaters.py
++++ b/klippy/extras/heaters.py
+@@ -4,6 +4,7 @@
+ #
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+ import os, logging, threading
++import json
+ 
+ 
+ ######################################################################
+@@ -103,9 +104,19 @@ class Heater:
+         return self.smooth_time
+     def set_temp(self, degrees):
+         if degrees and (degrees < self.min_temp or degrees > self.max_temp):
+-            raise self.printer.command_error(
+-                "Requested temperature (%.1f) out of range (%.1f:%.1f)"
+-                % (degrees, self.min_temp, self.max_temp))
++            err_msg = "%s: Requested temperature (%.1f) out of range (%.1f:%.1f)" % (
++                self.short_name, degrees, self.min_temp, self.max_temp)
++            if self.short_name == 'extruder':
++                err_msg = '{"coded": "0003-0523-0000-0036", "oneshot": %d, "msg":"%s"}' % (1, err_msg)
++            elif self.short_name.startswith('extruder') and self.short_name[8:].isdigit():
++                index = int(self.short_name[8:])
++                err_msg = '{"coded": "0003-0523-%04d-0036", "oneshot": %d, "msg":"%s"}' % (index, 1, err_msg)
++            elif self.short_name == 'heater_bed':
++                err_msg = '{"coded": "0003-0526-0000-0002", "oneshot": %d, "msg":"%s"}' % (1, err_msg)
++            raise self.printer.command_error(err_msg)
++            # raise self.printer.command_error(
++            #     "Requested temperature (%.1f) out of range (%.1f:%.1f)"
++            #     % (degrees, self.min_temp, self.max_temp))
+         with self.lock:
+             self.target_temp = degrees
+     def get_temp(self, eventtime):
+--- a/klippy/extras/homing.py
++++ b/klippy/extras/homing.py
+@@ -93,7 +93,9 @@ class HomingMove:
+         try:
+             self.toolhead.drip_move(movepos, speed, all_endstop_trigger)
+         except self.printer.command_error as e:
+-            error = "Error during homing move: %s" % (str(e),)
++            str_err = self.printer.extract_coded_message_field(str(e))
++            index = {'x': 0, 'y': 1, 'z': 2, 'probe': 3}.get(name, 255)
++            error = '{"coded": "0003-0528-%4d-0002", "msg":"%s", "action": "cancel"}' % (index, "Error during homing move %s: %s" % (name, str_err,))
+         # Wait for endstops to trigger
+         trigger_times = {}
+         move_end_print_time = self.toolhead.get_last_move_time()
+@@ -102,12 +104,15 @@ class HomingMove:
+                 trigger_time = mcu_endstop.home_wait(move_end_print_time)
+             except self.printer.command_error as e:
+                 if error is None:
+-                    error = "Error during homing %s: %s" % (name, str(e))
++                    str_err = self.printer.extract_coded_message_field(str(e))
++                    index = {'x': 0, 'y': 1, 'z': 2, 'probe': 3}.get(name, 255)
++                    error = '{"coded": "0003-0528-%4d-0003", "msg":"%s", "action": "cancel"}' % (index, "Error during homing %s: %s" % (name, str_err))
+                 continue
+             if trigger_time > 0.:
+                 trigger_times[name] = trigger_time
+             elif check_triggered and error is None:
+-                error = "No trigger on %s after full movement" % (name,)
++                index = {'x': 0, 'y': 1, 'z': 2, 'probe': 3}.get(name, 255)
++                error = '{"coded": "0003-0528-%4d-0004", "msg":"%s", "action": "cancel"}' % (index, "No trigger on %s after full movement" % (name,))
+         # Determine stepper halt positions
+         self.toolhead.flush_step_generation()
+         for sp in self.stepper_positions:
+@@ -239,8 +244,8 @@ class PrinterHoming:
+                               check_triggered=check_triggered)
+         except self.printer.command_error:
+             if self.printer.is_shutdown():
+-                raise self.printer.command_error(
+-                    "Homing failed due to printer shutdown")
++                error = '{"coded": "0003-0528-0000-0007", "msg":"%s"}' % ("Homing failed due to printer shutdown")
++                raise self.printer.command_error(error)
+             raise
+     def probing_move(self, mcu_probe, pos, speed):
+         endstops = [(mcu_probe, "probe")]
+@@ -249,12 +254,23 @@ class PrinterHoming:
+             epos = hmove.homing_move(pos, speed, probe_pos=True)
+         except self.printer.command_error:
+             if self.printer.is_shutdown():
+-                raise self.printer.command_error(
+-                    "Probing failed due to printer shutdown")
++                error = '{"coded": "0003-0528-0000-0008", "msg":"%s"}' % ("Probing failed due to printer shutdown")
++                raise self.printer.command_error(error)
+             raise
+         if hmove.check_no_movement() is not None:
+-            raise self.printer.command_error(
+-                "Probe triggered prior to movement")
++            error = '{"coded": "0003-0528-0000-0009", "msg":"%s"}' % ("Probe triggered prior to movement")
++            raise self.printer.command_error(error)
++        return epos
++    def probing_coil_move(self, mcu_probe, pos, speed, axis):
++        endstops = [(mcu_probe, "probe")]
++        hmove = HomingMove(self.printer, endstops)
++        try:
++            epos = hmove.homing_move(pos, speed, probe_pos=True)
++        except self.printer.command_error:
++            if self.printer.is_shutdown():
++                error = '{"coded": "0003-0528-0000-0008", "msg":"%s"}' % ("Probing failed due to printer shutdown")
++                raise self.printer.command_error(error)
++            raise
+         return epos
+     def cmd_G28(self, gcmd):
+         # Move to origin
+@@ -271,9 +287,8 @@ class PrinterHoming:
+             kin.home(homing_state)
+         except self.printer.command_error:
+             if self.printer.is_shutdown():
+-                raise self.printer.command_error(
+-                    "Homing failed due to printer shutdown")
+-            self.printer.lookup_object('stepper_enable').motor_off()
++                error = '{"coded": "0003-0528-0000-0007", "msg":"%s"}' % ("Homing failed due to printer shutdown")
++                raise self.printer.command_error(error)
+             raise
+ 
+ def load_config(config):
+--- a/klippy/extras/lis2dw.py
++++ b/klippy/extras/lis2dw.py
+@@ -76,11 +76,12 @@ class LIS2DW:
+         self.spi.spi_send([reg, val & 0xFF], minclock=minclock)
+         stored_val = self.read_reg(reg)
+         if stored_val != val:
+-            raise self.printer.command_error(
+-                    "Failed to set LIS2DW register [0x%x] to 0x%x: got 0x%x. "
+-                    "This is generally indicative of connection problems "
+-                    "(e.g. faulty wiring) or a faulty lis2dw chip." % (
+-                        reg, val, stored_val))
++            msg = ("Failed to set LIS2DW register [0x%x] to 0x%x: got 0x%x. "
++                  "This is generally indicative of connection problems "
++                  "(e.g. faulty wiring) or a faulty lis2dw chip." % (
++                      reg, val, stored_val))
++            err_msg = '{"coded": "0003-0522-0000-0009", "oneshot": 1, "msg":"%s"}' % msg
++            raise self.printer.command_error(err_msg)
+     def start_internal_client(self):
+         aqh = adxl345.AccelQueryHelper(self.printer)
+         self.batch_bulk.add_client(aqh.handle_batch)
+@@ -103,11 +104,12 @@ class LIS2DW:
+         dev_id = self.read_reg(REG_LIS2DW_WHO_AM_I_ADDR)
+         logging.info("lis2dw_dev_id: %x", dev_id)
+         if dev_id != LIS2DW_DEV_ID:
+-            raise self.printer.command_error(
+-                "Invalid lis2dw id (got %x vs %x).\n"
+-                "This is generally indicative of connection problems\n"
+-                "(e.g. faulty wiring) or a faulty lis2dw chip."
+-                % (dev_id, LIS2DW_DEV_ID))
++            msg = ("Invalid lis2dw id (got %x vs %x). "
++                  "Possible causes: connection problems (faulty wiring) "
++                  "or a faulty lis2dw chip."
++                  % (dev_id, LIS2DW_DEV_ID))
++            err_msg = '{"coded": "0003-0522-0000-0010", "oneshot": 1, "msg":"%s"}' % msg
++            raise self.printer.command_error(err_msg)
+         # Setup chip in requested query rate
+         # ODR/2, +-16g, low-pass filter, Low-noise abled
+         self.set_reg(REG_LIS2DW_CTRL_REG6_ADDR, 0x34)
+--- a/klippy/extras/tmc.py
++++ b/klippy/extras/tmc.py
+@@ -160,8 +160,10 @@ class TMCErrorCheck:
+             count += 1
+             if count >= 3:
+                 fmt = self.fields.pretty_format(reg_name, val)
+-                raise self.printer.command_error("TMC '%s' reports error: %s"
+-                                                 % (self.stepper_name, fmt))
++                err_msg = '{"coded": "0003-0522-0000-0011", "oneshot": 0, "msg":"%s"}' % ("TMC '%s' reports error: %s" % (self.stepper_name, fmt))
++                raise self.printer.command_error(err_msg)
++                # raise self.printer.command_error("TMC '%s' reports error: %s"
++                #                                  % (self.stepper_name, fmt))
+             if try_clear and val & err_mask:
+                 try_clear = False
+                 cleared_flags |= val & err_mask
+--- a/klippy/extras/verify_heater.py
++++ b/klippy/extras/verify_heater.py
+@@ -84,7 +84,41 @@ class HeaterCheck:
+         self.last_target = target
+         return eventtime + 1.
+     def heater_fault(self):
+-        msg = "Heater %s not heating at expected rate" % (self.heater_name,)
++        if self.heater is not None:
++            temp, target = self.heater.smoothed_temp, self.heater.target_temp
++            msg = "Heater %s not heating at expected rate, temp: %.2f target: %.2f" % (self.heater_name, temp, target)
++        else:
++            msg = "Heater %s not heating at expected rate" % (self.heater_name,)
++        heater_index = 0
++        heater_type = "unknown"
++        import re
++        extruder_match = re.search(r'(extruder\d*)', self.heater_name)
++        if extruder_match:
++            found_heater = extruder_match.group(1)
++            extruder_num = found_heater.replace('extruder', '')
++            if extruder_num == '':
++                heater_index = 0
++            else:
++                heater_index = int(extruder_num)
++            heater_type = "extruder"
++        elif self.heater_name == 'heater_bed':
++            heater_type = "heater_bed"
++        elif self.heater_name.startswith('extruder'):
++            extruder_num = self.heater_name.replace('extruder', '')
++            if extruder_num == '':
++                heater_index = 0
++            else:
++                heater_index = int(extruder_num)
++            heater_type = "extruder"
++
++        if heater_type == "extruder":
++            id, index, code = 523, heater_index, 3
++        elif heater_type == "heater_bed":
++            id, index, code = 526, 0, 1
++        else:
++            id, index, code = 522, 0, 15
++        coded, oneshot, is_persistent = f"0003-{id:04d}-{index:04d}-{code:04d}", 0, 0
++        msg = '{"coded": "%s", "oneshot": %d, "msg":"%s"}' % (coded, 0, msg.replace('"',"'"))
+         logging.error(msg)
+         self.printer.invoke_shutdown(msg + HINT_THERMAL)
+         return self.printer.get_reactor().NEVER
+--- a/klippy/extras/virtual_sdcard.py
++++ b/klippy/extras/virtual_sdcard.py
+@@ -88,7 +88,9 @@ class VirtualSD:
+                         and os.path.isfile((os.path.join(dname, fname)))]
+             except:
+                 logging.exception("virtual_sdcard get_file_list")
+-                raise self.gcode.error("Unable to get file list")
++                error = '{"coded": "0001-0531-0000-0000", "msg":"%s", "action": "none"}' % ("Unable to get file list")
++                raise self.gcode.error(error)
++                # raise self.gcode.error("Unable to get file list")
+     def get_status(self, eventtime):
+         return {
+             'file_path': self.file_path(),
+@@ -115,7 +117,9 @@ class VirtualSD:
+                 self.reactor.pause(self.reactor.monotonic() + .001)
+     def do_resume(self):
+         if self.work_timer is not None:
+-            raise self.gcode.error("SD busy")
++            error = '{"coded": "0001-0531-0000-0001", "msg":"%s", "action": "none"}' % ("SD busy")
++            raise self.gcode.error(error)
++            # raise self.gcode.error("SD busy")
+         self.must_pause_work = False
+         self.work_timer = self.reactor.register_timer(
+             self.work_handler, self.reactor.NOW)
+@@ -128,7 +132,9 @@ class VirtualSD:
+         self.file_position = self.file_size = 0
+     # G-Code commands
+     def cmd_error(self, gcmd):
+-        raise gcmd.error("SD write not supported")
++        error = '{"coded": "0001-0531-0000-0002", "msg":"%s", "action": "none"}' % ("SD write not supported")
++        raise gcmd.error(error)
++        # raise gcmd.error("SD write not supported")
+     def _reset_file(self):
+         if self.current_file is not None:
+             self.do_pause()
+@@ -141,14 +147,18 @@ class VirtualSD:
+         "if necessary"
+     def cmd_SDCARD_RESET_FILE(self, gcmd):
+         if self.cmd_from_sd:
+-            raise gcmd.error(
+-                "SDCARD_RESET_FILE cannot be run from the sdcard")
++            error = '{"coded": "0001-0531-0000-0003", "msg":"%s", "action": "none"}' % ("SDCARD_RESET_FILE cannot be run from the sdcard")
++            raise gcmd.error(error)
++            # raise gcmd.error(
++            #     "SDCARD_RESET_FILE cannot be run from the sdcard")
+         self._reset_file()
+     cmd_SDCARD_PRINT_FILE_help = "Loads a SD file and starts the print.  May "\
+         "include files in subdirectories."
+     def cmd_SDCARD_PRINT_FILE(self, gcmd):
+         if self.work_timer is not None:
+-            raise gcmd.error("SD busy")
++            error = '{"coded": "0001-0531-0000-0001", "msg":"%s", "action": "none"}' % ("SD busy")
++            raise gcmd.error(error)
++            # raise gcmd.error("SD busy")
+         self._reset_file()
+         filename = gcmd.get("FILENAME")
+         if filename[0] == '/':
+@@ -168,7 +178,9 @@ class VirtualSD:
+     def cmd_M23(self, gcmd):
+         # Select SD file
+         if self.work_timer is not None:
+-            raise gcmd.error("SD busy")
++            error = '{"coded": "0001-0531-0000-0001", "msg":"%s", "action": "none"}' % ("SD busy")
++            raise gcmd.error(error)
++            # raise gcmd.error("SD busy")
+         self._reset_file()
+         filename = gcmd.get_raw_command_parameters().strip()
+         if filename.startswith('/'):
+@@ -189,7 +201,10 @@ class VirtualSD:
+             f.seek(0)
+         except:
+             logging.exception("virtual_sdcard file open")
+-            raise gcmd.error("Unable to open file")
++            error_msg = '{"coded": "0003-0531-0000-0004", "msg":"%s", "action": "none"}' % (
++                            "Unable to open file")
++            raise gcmd.error(error_msg)
++            # raise gcmd.error("Unable to open file")
+         gcmd.respond_raw("File opened:%s Size:%d" % (filename, fsize))
+         gcmd.respond_raw("File selected")
+         self.current_file = f
+@@ -205,7 +220,9 @@ class VirtualSD:
+     def cmd_M26(self, gcmd):
+         # Set SD position
+         if self.work_timer is not None:
+-            raise gcmd.error("SD busy")
++            error = '{"coded": "0001-0531-0000-0001", "msg":"%s", "action": "none"}' % ("SD busy")
++            raise gcmd.error(error)
++            # raise gcmd.error("SD busy")
+         pos = gcmd.get_int('S', minval=0)
+         self.file_position = pos
+     def cmd_M27(self, gcmd):
+--- a/klippy/gcode.py
++++ b/klippy/gcode.py
+@@ -3,9 +3,13 @@
+ # Copyright (C) 2016-2021  Kevin O'Connor <kevin@koconnor.net>
+ #
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+-import os, re, logging, collections, shlex
++import os, re, logging, collections, shlex, threading
+ 
+-class CommandError(Exception):
++from coded_exception import CodedException
++
++_thread_local = threading.local()
++
++class CommandError(CodedException):
+     pass
+ 
+ Coord = collections.namedtuple('Coord', ('x', 'y', 'z', 'e'))
+@@ -58,25 +62,25 @@ class GCodeCommand:
+         if value is None:
+             if default is self.sentinel:
+                 raise self.error("Error on '%s': missing %s"
+-                                 % (self._commandline, name))
++                                 % (self._commandline, name), id=529, code=0, level=3)
+             return default
+         try:
+             value = parser(value)
+         except:
+             raise self.error("Error on '%s': unable to parse %s"
+-                             % (self._commandline, value))
++                             % (self._commandline, value), id=529, code=1, level=3)
+         if minval is not None and value < minval:
+             raise self.error("Error on '%s': %s must have minimum of %s"
+-                             % (self._commandline, name, minval))
++                             % (self._commandline, name, minval), id=529, code=2, level=3)
+         if maxval is not None and value > maxval:
+             raise self.error("Error on '%s': %s must have maximum of %s"
+-                             % (self._commandline, name, maxval))
++                             % (self._commandline, name, maxval), id=529, code=3, level=3)
+         if above is not None and value <= above:
+             raise self.error("Error on '%s': %s must be above %s"
+-                             % (self._commandline, name, above))
++                             % (self._commandline, name, above), id=529, code=4, level=3)
+         if below is not None and value >= below:
+             raise self.error("Error on '%s': %s must be below %s"
+-                             % (self._commandline, name, below))
++                             % (self._commandline, name, below), id=529, code=5, level=3)
+         return value
+     def get_int(self, name, default=sentinel, minval=None, maxval=None):
+         return self.get(name, default, parser=int, minval=minval, maxval=maxval)
+@@ -91,6 +95,7 @@ class GCodeDispatch:
+     Coord = Coord
+     def __init__(self, printer):
+         self.printer = printer
++        self.exception_manager = None
+         self.is_fileinput = not not printer.get_start_args().get("debuginput")
+         printer.register_event_handler("klippy:ready", self._handle_ready)
+         printer.register_event_handler("klippy:shutdown", self._handle_shutdown)
+@@ -130,8 +135,10 @@ class GCodeDispatch:
+             self._build_status_commands()
+             return old_cmd
+         if cmd in self.ready_gcode_handlers:
+-            raise self.printer.config_error(
+-                "gcode command %s already registered" % (cmd,))
++            error = '{"coded": "0003-0529-0000-0006", "msg":"%s"}' % ("gcode command %s already registered" % (cmd,))
++            raise self.printer.config_error(error)
++            # raise self.printer.config_error(
++            #     "gcode command %s already registered" % (cmd,))
+         if not self.is_traditional_gcode(cmd):
+             origfunc = func
+             func = lambda params: origfunc(self._get_extended_params(params))
+@@ -149,13 +156,19 @@ class GCodeDispatch:
+             self.mux_commands[cmd] = prev = (key, {})
+         prev_key, prev_values = prev
+         if prev_key != key:
+-            raise self.printer.config_error(
+-                "mux command %s %s %s may have only one key (%s)" % (
+-                    cmd, key, value, prev_key))
++            error = '{"coded": "0003-0529-0000-0007", "msg":"%s"}' % (
++                        "mux command %s %s %s may have only one key (%s)" % (cmd, key, value, prev_key))
++            raise self.printer.config_error(error)
++            # raise self.printer.config_error(
++            #     "mux command %s %s %s may have only one key (%s)" % (
++            #         cmd, key, value, prev_key))
+         if value in prev_values:
+-            raise self.printer.config_error(
+-                "mux command %s %s %s already registered (%s)" % (
+-                    cmd, key, value, prev_values))
++            error = '{"coded": "0003-0529-0000-0007", "msg":"%s"}' % (
++                        "mux command %s %s %s already registered (%s)" % (cmd, key, value, prev_values))
++            raise self.printer.config_error(error)
++            # raise self.printer.config_error(
++            #     "mux command %s %s %s already registered (%s)" % (
++            #         cmd, key, value, prev_values))
+         prev_values[value] = func
+     def get_command_help(self):
+         return dict(self.gcode_help)
+@@ -186,42 +199,54 @@ class GCodeDispatch:
+     # Parse input into commands
+     args_r = re.compile('([A-Z_]+|[A-Z*/])')
+     def _process_commands(self, commands, need_ack=True):
+-        for line in commands:
+-            # Ignore comments and leading/trailing spaces
+-            line = origline = line.strip()
+-            cpos = line.find(';')
+-            if cpos >= 0:
+-                line = line[:cpos]
+-            # Break line into parts and determine command
+-            parts = self.args_r.split(line.upper())
+-            numparts = len(parts)
+-            cmd = ""
+-            if numparts >= 3 and parts[1] != 'N':
+-                cmd = parts[1] + parts[2].strip()
+-            elif numparts >= 5 and parts[1] == 'N':
+-                # Skip line number at start of command
+-                cmd = parts[3] + parts[4].strip()
+-            # Build gcode "params" dictionary
+-            params = { parts[i]: parts[i+1].strip()
+-                       for i in range(1, numparts, 2) }
+-            gcmd = GCodeCommand(self, cmd, origline, params, need_ack)
+-            # Invoke handler for command
+-            handler = self.gcode_handlers.get(cmd, self.cmd_default)
+-            try:
+-                handler(gcmd)
+-            except self.error as e:
+-                self._respond_error(str(e))
+-                self.printer.send_event("gcode:command_error")
+-                if not need_ack:
+-                    raise
+-            except:
+-                msg = 'Internal error on command:"%s"' % (cmd,)
+-                logging.exception(msg)
+-                self.printer.invoke_shutdown(msg)
+-                self._respond_error(msg)
+-                if not need_ack:
+-                    raise
+-            gcmd.ack()
++        # Check if this is the top-level call to avoid duplicate exception handling
++        is_top_level = not getattr(_thread_local, 'in_process_commands', False)
++        if is_top_level:
++            _thread_local.in_process_commands = True
++        try:
++            for line in commands:
++                # Ignore comments and leading/trailing spaces
++                line = origline = line.strip()
++                cpos = line.find(';')
++                if cpos >= 0:
++                    line = line[:cpos]
++                # Break line into parts and determine command
++                parts = self.args_r.split(line.upper())
++                numparts = len(parts)
++                cmd = ""
++                if numparts >= 3 and parts[1] != 'N':
++                    cmd = parts[1] + parts[2].strip()
++                elif numparts >= 5 and parts[1] == 'N':
++                    # Skip line number at start of command
++                    cmd = parts[3] + parts[4].strip()
++                # Build gcode "params" dictionary
++                params = { parts[i]: parts[i+1].strip()
++                        for i in range(1, numparts, 2) }
++                gcmd = GCodeCommand(self, cmd, origline, params, need_ack)
++                # Invoke handler for command
++                handler = self.gcode_handlers.get(cmd, self.cmd_default)
++                try:
++                    handler(gcmd)
++                except self.error as e:
++                    if is_top_level:
++                        str_err = self.printer.extract_coded_message_field(str(e))
++                        self._respond_error(str_err)
++                        self.printer.send_event("gcode:command_error")
++                        self.printer.raise_coded_exception(e)
++                    if not need_ack:
++                        raise
++                except:
++                    msg = 'Internal error on command:"%s"' % (cmd,)
++                    logging.exception(msg)
++                    self.printer.invoke_shutdown(msg)
++                    self._respond_error(msg)
++                    if not need_ack:
++                        raise
++                gcmd.ack()
++        finally:
++            # Ensure cleanup of thread-local variable
++            if is_top_level:
++                _thread_local.in_process_commands = False
+     def run_script_from_command(self, script):
+         self._process_commands(script.split('\n'), need_ack=False)
+     def run_script(self, script):
+@@ -260,7 +285,7 @@ class GCodeDispatch:
+         m = self.extended_r.match(gcmd.get_commandline())
+         if m is None:
+             raise self.error("Malformed command '%s'"
+-                             % (gcmd.get_commandline(),))
++                             % (gcmd.get_commandline(),), id=529, code=8, level=3)
+         eargs = m.group('args')
+         try:
+             eparams = [earg.split('=', 1) for earg in shlex.split(eargs)]
+@@ -270,7 +295,7 @@ class GCodeDispatch:
+             return gcmd
+         except ValueError as e:
+             raise self.error("Malformed command '%s'"
+-                             % (gcmd.get_commandline(),))
++                             % (gcmd.get_commandline(),), id=529, code=8, level=3)
+     # G-Code special command handlers
+     def cmd_default(self, gcmd):
+         cmd = gcmd.get_command()
+@@ -311,7 +336,7 @@ class GCodeDispatch:
+             key_param = gcmd.get(key)
+         if key_param not in values:
+             raise gcmd.error("The value '%s' is not valid for %s"
+-                             % (key_param, key))
++                             % (key_param, key), id=529, code=9, level=1)
+         values[key_param](gcmd)
+     # Low-level G-Code commands that are needed before the config file is loaded
+     def cmd_M110(self, gcmd):
+--- a/klippy/klippy.py
++++ b/klippy/klippy.py
+@@ -36,8 +36,125 @@ class Printer:
+         self.event_handlers = {}
+         self.objects = collections.OrderedDict()
+         # Init printer components that must be setup prior to config
+-        for m in [gcode, webhooks]:
++        for m in [gcode, webhooks, exception_manager]:
+             m.add_early_printer_objects(self)
++
++    def extract_encoded_message(self, message):
++        try:
++            if isinstance(message, str):
++                try:
++                    json_match = re.search(r'\{[\s\S]*\}', message)
++                    if not json_match:
++                        # logging.warning("No JSON-like structure found in input text:\n{}".format(message))
++                        return None
++                    json_str = json_match.group(0)
++                    # Try to parse JSON
++                    try:
++                        data = json.loads(json_str)
++                        return data
++                    except json.JSONDecodeError as e:
++                        logging.error(f"JSON parsing failed: {e}")
++                        logging.error(f"Problematic JSON: {json_str}")
++                        return None
++
++                except Exception as e:
++                    logging.error(f"Unexpected error during JSON extraction: {e}")
++                    return None
++            elif isinstance(message, dict):
++                return message
++            else:
++                logging.warning(f"Unsupported data type: {type(message)}")
++                return None
++        except Exception as e:
++            logging.error(f"Unexpected error during processing: {e}")
++            return None
++
++    def extract_coded_message_field(self, input_data, field_name='msg'):
++        try:
++            extracted = self.extract_encoded_message(input_data)
++            if isinstance(extracted, dict) and field_name in extracted:
++                return extracted[field_name]
++            return input_data
++
++        except Exception as e:
++            logging.error(f"Error in extract_field: {str(e)}")
++            return input_data
++
++    def raise_structured_code_exception(self, structured_code, message=None, oneshot=1, is_persistent=0, action=None):
++        try:
++            exception_manager = self.lookup_object('exception_manager', None)
++            if exception_manager is not None:
++                parsed_info = exception_manager._parse_structured_code(structured_code)
++                if parsed_info is not None:
++                    id = parsed_info['id']
++                    index = parsed_info['index']
++                    code = parsed_info['code']
++                    level = parsed_info.get('level', None)
++                    exception_manager.raise_exception_async(
++                        id, index, code, message, oneshot, level, is_persistent, action)
++                else:
++                    logging.error("Invalid structured code format: {}".format(structured_code))
++        except Exception as e:
++            logging.error("Failed to raise structured code exception: {}".format(e))
++
++    def clear_structured_code_exception(self, structured_code):
++        try:
++            exception_manager = self.lookup_object('exception_manager', None)
++            if exception_manager is not None:
++                parsed_info = exception_manager._parse_structured_code(structured_code)
++                if parsed_info is not None:
++                    id = parsed_info['id']
++                    index = parsed_info['index']
++                    code = parsed_info['code']
++                    exception_manager.clear_exception(id, index, code)
++        except Exception as e:
++            logging.error("Failed to clear structured code exception: {}".format(structured_code))
++
++    def clear_exception(self, id, index, code):
++        exception_manager = self.lookup_object('exception_manager', None)
++        if exception_manager is not None:
++            exception_manager.clear_exception(id, index, code)
++
++    def raise_coded_exception(self, exception, parse_coded_msg=True):
++        try:
++            # stack_str = "".join(traceback.format_stack())
++            # logging.info("Call stack:\n%s", stack_str)
++            exception_manager = self.lookup_object('exception_manager', None)
++            if exception_manager is not None:
++                exc_obj = coded_exception.CodedException.from_exception(exception)
++                id, index, code, message, oneshot, level, is_persistent, action, proactive_report = \
++                    exc_obj.id, exc_obj.index, exc_obj.code, exc_obj.message, exc_obj.oneshot, \
++                    exc_obj.level, exc_obj.is_persistent, exc_obj.action, exc_obj.proactive_report
++                if parse_coded_msg and message:
++                    coded_message = self.extract_encoded_message(message)
++                    if coded_message is not None:
++                        structured_code = coded_message.get("coded", None)
++                        if structured_code is not None:
++                            parsed_structured_code = exception_manager._parse_structured_code(structured_code)
++                            id = parsed_structured_code.get("id", id)
++                            index = parsed_structured_code.get("index", index)
++                            code = parsed_structured_code.get("code", code)
++                            level = parsed_structured_code.get("level", level)
++                        else:
++                            id = coded_message.get("id", id)
++                            index = coded_message.get("index", index)
++                            code = coded_message.get("code", code)
++                            level = coded_message.get("level", level)
++                        message = coded_message.get("msg", message)
++                        oneshot = coded_message.get("oneshot", oneshot)
++                        is_persistent = coded_message.get("is_persistent", is_persistent)
++                        action = coded_message.get("action", action)
++                        proactive_report = coded_message.get("proactive_report", proactive_report)
++
++                if not proactive_report:
++                    logging.info(f"Exception not reported proactively: id:{id} index:{index} code:{code}")
++                    return
++
++                exception_manager.raise_exception_async(
++                            id, index, code, message, oneshot, level, is_persistent, action)
++        except Exception as e:
++            logging.error("Failed to raise exception: {}".format(e))
++
+     def get_start_args(self):
+         return self.start_args
+     def get_reactor(self):
+@@ -135,26 +252,71 @@ class Printer:
+                 cb()
+         except (self.config_error, pins.error) as e:
+             logging.exception("Config error")
+-            self._set_state("%s\n%s" % (str(e), message_restart))
++            # self._set_state("%s\n%s" % (str(e), message_restart))
++            if isinstance(e, self.config_error):
++                coded, oneshot, message, is_persistent = "0003-0522-0000-0003", 0, str(e), 0
++            else:
++                coded, oneshot, message, is_persistent = "0003-0522-0000-0004", 0, str(e), 0
++
++            message = self.extract_coded_message_field(message)
++            err_msg = json.dumps({
++                "coded": coded,
++                "oneshot": oneshot,
++                "msg": message
++            })
++            self.raise_structured_code_exception(coded, message, oneshot, is_persistent)
++            self._set_state("%s\n%s" % (err_msg, message_restart))
+             return
+         except msgproto.error as e:
+             msg = "Protocol error"
+             logging.exception(msg)
+-            self._set_state(msg)
+-            self.send_event("klippy:notify_mcu_error", msg, {"error": str(e)})
++            # self._set_state(msg)
++            coded, oneshot, message, is_persistent = "0003-0522-0000-0005", 0, str(e), 0
++            message = self.extract_coded_message_field(message)
++            err_msg = json.dumps({
++                "coded": coded,
++                "oneshot": oneshot,
++                "msg": message
++            })
++            self._set_state("%s\n%s" % (err_msg, msg))
++            self.raise_structured_code_exception(coded, message, oneshot, is_persistent)
++            self.send_event("klippy:notify_mcu_error", "%s\n%s" % (err_msg, msg), {"error": message})
+             util.dump_mcu_build()
+             return
+         except mcu.error as e:
+             msg = "MCU error during connect"
++            mcu_index_manager = ["'host'", "'mcu'", "'e0'", "'e1'", "'e2'", "'e3'"]
+             logging.exception(msg)
+-            self._set_state(msg)
+-            self.send_event("klippy:notify_mcu_error", msg, {"error": str(e)})
++            err_info = str(e)
++            mcu_index = 255
++            for index, mcu_str in enumerate(mcu_index_manager):
++                if f"{mcu_str}" in f"{err_info}":
++                    mcu_index = index
++                    break
++            coded, oneshot, message, is_persistent = f"0003-0522-{mcu_index:04d}-0006", 0, err_info, 0
++            message = self.extract_coded_message_field(message)
++            err_msg = json.dumps({
++                "coded": coded,
++                "oneshot": oneshot,
++                "msg": message
++            })
++            self._set_state("%s\n%s" % (err_msg, msg))
++            self.raise_structured_code_exception(coded, message, oneshot, is_persistent)
++            self.send_event("klippy:notify_mcu_error", "%s\n%s" % (err_msg, msg), {"error": message})
+             util.dump_mcu_build()
+             return
+         except Exception as e:
+             logging.exception("Unhandled exception during connect")
+-            self._set_state("Internal error during connect: %s\n%s"
+-                            % (str(e), message_restart,))
++            coded, oneshot, message, is_persistent = "0003-0522-0000-0007", 0, str(e), 0
++            message = self.extract_coded_message_field(message)
++            self.raise_structured_code_exception(coded, message, oneshot, is_persistent)
++            err_msg = json.dumps({
++                "coded": coded,
++                "oneshot": oneshot,
++                "msg": message
++            })
++            self._set_state("%s \nInternal error during connect: %s\n%s"
++                            % (err_msg, str(e), message_restart,))
+             return
+         try:
+             self._set_state(message_ready)
+@@ -164,8 +326,21 @@ class Printer:
+                 cb()
+         except Exception as e:
+             logging.exception("Unhandled exception during ready callback")
+-            self.invoke_shutdown("Internal error during ready callback: %s"
+-                                 % (str(e),))
++            structured_code = None
++            coded_message = self.extract_encoded_message(str(e))
++            if coded_message is not None:
++                structured_code = coded_message.get("coded", None)
++            if structured_code is not None:
++                err_msg = json.dumps({
++                    "coded": structured_code,
++                    "oneshot": 0,
++                    "msg": "Internal error during ready callback: %s"
++                                    % (self.extract_coded_message_field(str(e)))
++                })
++                self.invoke_shutdown(err_msg)
++            else:
++                self.invoke_shutdown("Internal error during ready callback: %s"
++                                    % (str(e),))
+     def run(self):
+         systime = time.time()
+         monotime = self.reactor.monotonic()
+@@ -205,7 +380,43 @@ class Printer:
+             return
+         logging.error("Transition to shutdown state: %s", msg)
+         self.in_shutdown_state = True
++        # self._set_state(msg)
++
++        if msg == "MCU shutdown" and details.get('reason') == 'Timer too close':
++            index = {'host': 0, 'mcu': 1, 'e0': 2, 'e1': 3, 'e2': 4,'e3': 5}.get(details['mcu'], 255)
++            err_msg = "MCU '%s' shutdown: %s" % (details['mcu'], details.get('reason'))
++            msg = '{"coded": "%s", "oneshot": 0, "msg":"%s"}' % (f"0003-0522-{index:04d}-0016", err_msg)
++
++        if not (msg == "MCU shutdown" and details.get('reason') == 'ADC out of range'):
++            coded, oneshot, message, is_persistent = f"0003-0522-0000-0002", 0, msg, 0
++            coded_message = self.extract_encoded_message(msg)
++            if msg and msg.startswith('{"coded"'):
++                if coded_message is not None:
++                    coded = coded_message.get("coded", coded)
++                    oneshot = coded_message.get("oneshot", oneshot)
++                    message = coded_message.get("msg", message)
++                    is_persistent = coded_message.get("is_persistent", is_persistent)
++            else:
++                if coded_message is not None:
++                    id, index, code, level = 522, 0, 2, 3
++                    id = coded_message.get("id", id)
++                    index = coded_message.get("index", index)
++                    code = coded_message.get("code", code)
++                    message = coded_message.get("msg", message)
++                    oneshot = coded_message.get("oneshot", oneshot)
++                    level = coded_message.get("level", level)
++                    is_persistent = coded_message.get("is_persistent", is_persistent)
++                    coded = f"{level:04d}-{id:04d}-{code:04d}-{level:04d}"
++                msg = json.dumps({
++                    "coded": coded,
++                    "oneshot": oneshot,
++                    "msg": message
++                })
++
++            self.raise_structured_code_exception(coded, message, oneshot, is_persistent)
++
+         self._set_state(msg)
++
+         for cb in self.event_handlers.get("klippy:shutdown", []):
+             try:
+                 cb()
+--- a/klippy/mcu.py
++++ b/klippy/mcu.py
+@@ -988,8 +988,13 @@ class MCU:
+         self._is_timeout = True
+         logging.info("Timeout with MCU '%s' (eventtime=%f)",
+                      self._name, eventtime)
+-        self._printer.invoke_shutdown("Lost communication with MCU '%s'" % (
+-            self._name,))
++        index = {'host': 0, 'mcu': 1, 'e0': 2, 'e1': 3, 'e2': 4,'e3': 5}.get(self._name, 255)
++        err_info = "Lost communication with MCU '%s'" % (self._name,)
++        coded, oneshot = f"0003-0522-{index:04d}-0008", 0
++        coded_message = '{"coded": "%s", "oneshot": %d, "msg":"%s"}' % (coded, oneshot, err_info)
++        self._printer.invoke_shutdown(coded_message)
++        # self._printer.invoke_shutdown("Lost communication with MCU '%s'" % (
++        #     self._name,))
+     # Misc external commands
+     def is_fileoutput(self):
+         return self._printer.get_start_args().get('debugoutput') is not None
+@@ -1000,8 +1005,9 @@ class MCU:
+     def get_status(self, eventtime=None):
+         return dict(self._get_status_info)
+     def stats(self, eventtime):
+-        load = "mcu_awake=%.03f mcu_task_avg=%.06f mcu_task_stddev=%.06f" % (
+-            self._mcu_tick_awake, self._mcu_tick_avg, self._mcu_tick_stddev)
++        load = "mcu_awake=%.03f mcu_task_avg=%.06f mcu_task_stddev=%.06f err_len=%d err_dest=%d err_sync=%d err_crc=%d" % (
++            self._mcu_tick_awake, self._mcu_tick_avg, self._mcu_tick_stddev,
++            self._mcu_err_msg_len, self._mcu_err_msg_dest, self._mcu_err_msg_sync, self._mcu_err_msg_crc)
+         stats = ' '.join([load, self._serial.stats(eventtime),
+                           self._clocksync.stats(eventtime)])
+         parts = [s.split('=', 1) for s in stats.split()]
+--- a/klippy/msgproto.py
++++ b/klippy/msgproto.py
+@@ -4,6 +4,7 @@
+ #
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+ import json, zlib, logging
++from coded_exception import CodedException
+ 
+ DefaultMessages = {
+     "identify_response offset=%u data=%.*s": 0,
+@@ -23,7 +24,7 @@ MESSAGE_SEQ_MASK = 0x0f
+ MESSAGE_DEST = 0x10
+ MESSAGE_SYNC = 0x7e
+ 
+-class error(Exception):
++class error(CodedException):
+     pass
+ 
+ def crc16_ccitt(buf):
+--- a/klippy/pins.py
++++ b/klippy/pins.py
+@@ -4,8 +4,9 @@
+ #
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+ import re
++from coded_exception import CodedException
+ 
+-class error(Exception):
++class error(CodedException):
+     pass
+ 
+ 
+--- a/klippy/serialhdl.py
++++ b/klippy/serialhdl.py
+@@ -278,8 +278,10 @@ class SerialReader:
+         for i in range(scount):
+             msg = sdata[i]
+             cmds = self.msgparser.dump(msg.msg[0:msg.len])
+-            out.append("Sent %d %f %f %d: %s" % (
+-                i, msg.receive_time, msg.sent_time, msg.len, ', '.join(cmds)))
++            min_time = clock_to_systime(msg.min_clock)
++            req_time = clock_to_systime(msg.req_clock)
++            out.append("Sent %d %f %f min_t=%f req_t=%f %d: %s" % (
++                i, msg.receive_time, msg.sent_time, min_time, req_time, msg.len, ', '.join(cmds)))
+         out.append("Dumping receive queue %d messages" % (rcount,))
+         for i in range(rcount):
+             msg = rdata[i]
+@@ -297,6 +299,12 @@ class SerialReader:
+     def handle_output(self, params):
+         logging.info("%s%s: %s", self.warn_prefix,
+                      params['#name'], params['#msg'])
++        msg = params.get('#msg', '')
++        if 'Power loss info saved' == msg and self._mcu is not None:
++            mcu_index = {'mcu': 0, 'e0': 1, 'e1': 2, 'e2': 3, 'e3': 4}.get(self._mcu._name, 255)
++            coded = "0003-0522-%4d-0017" % mcu_index
++            self._mcu.get_printer().raise_structured_code_exception(coded, msg, 0, 0)
++
+     def handle_default(self, params):
+         logging.warning("%sgot %s", self.warn_prefix, params)
+ 
+--- a/klippy/toolhead.py
++++ b/klippy/toolhead.py
+@@ -58,6 +58,22 @@ class Move:
+     def move_error(self, msg="Move out of range"):
+         ep = self.end_pos
+         m = "%s: %.3f %.3f %.3f [%.3f]" % (msg, ep[0], ep[1], ep[2], ep[3])
++        if msg.startswith("Must home ") and msg.endswith(" axis first"):
++            if len(msg) > 10:
++                axis_char = msg[10]
++                axis_index = ord(axis_char) - ord('X')
++                if 0 <= axis_index <= 2:
++                    coded_msg = '{"coded": "0003-0522-%04d-0012", "msg":"%s"}' % (axis_index, m)
++                    return self.toolhead.printer.command_error(coded_msg)
++        elif msg.startswith("Move out of range on ") and msg.endswith(" axis"):
++            parts = msg.split()
++            if len(parts) >= 6:
++                axis_char = parts[5][0]
++                axis_index = ord(axis_char) - ord('X')
++                if 0 <= axis_index <= 2:
++                    coded_msg = '{"coded": "0003-0522-%04d-0013", "msg":"%s"}' % (axis_index, m)
++                    return self.toolhead.printer.command_error(coded_msg)
++
+         return self.toolhead.printer.command_error(m)
+     def calc_junction(self, prev_move):
+         if not self.is_kinematic_move or not prev_move.is_kinematic_move:
+--- a/klippy/webhooks.py
++++ b/klippy/webhooks.py
+@@ -187,6 +187,7 @@ class ClientConnection:
+         self.blocking_count = 0
+         self.set_client_info("?", "New connection")
+         self.request_log = collections.deque([], REQUEST_LOG_SIZE)
++        self.exception_manager = self.printer.lookup_object('exception_manager', None)
+ 
+     def dump_request_log(self):
+         out = []
+@@ -251,11 +252,16 @@ class ClientConnection:
+                 lambda e, s=self, wr=web_request: s._process_request(wr))
+ 
+     def _process_request(self, web_request):
++        method = None
+         try:
++            method = web_request.get_method()
+             func = self.webhooks.get_callback(web_request.get_method())
+             func(web_request)
+         except self.printer.command_error as e:
+-            web_request.set_error(WebRequestError(str(e)))
++            str_err = self.printer.extract_coded_message_field(str(e))
++            web_request.set_error(WebRequestError(str_err))
++            if method != "gcode/script":
++                self.printer.raise_coded_exception(e)
+         except Exception as e:
+             msg = ("Internal Error on WebRequest: %s"
+                    % (web_request.get_method()))
+@@ -369,6 +375,9 @@ class WebHooks:
+ 
+     def _handle_estop_request(self, web_request):
+         self.printer.invoke_shutdown("Shutdown due to webhooks request")
++        # shutdown_msg = '{"coded":"%s", "oneshot": %d, "msg":"%s"}' % ("0003-0522-0001-0002", 0, "Shutdown due to webhooks request".replace('"',"'"))
++        # shutdown_msg = '{"code": %d, "index": %d, "oneshot": %d, "msg":"%s"}' % (9, 5, 0, "Shutdown due to webhooks request".replace('"',"'"))
++        # self.printer.invoke_shutdown(shutdown_msg)
+ 
+     def _handle_rpc_registration(self, web_request):
+         template = web_request.get_dict('response_template')
