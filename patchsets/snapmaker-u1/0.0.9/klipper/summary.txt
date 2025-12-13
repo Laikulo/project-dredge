@@ -1,0 +1,85 @@
+Files stock/klippy/chelper/__init__.py and vendor/klippy/chelper/__init__.py differ
+Only in vendor/klippy: coded_exception.py
+Files stock/klippy/configfile.py and vendor/klippy/configfile.py differ
+Only in vendor/klippy: exception_manager.py
+Only in vendor/klippy/extras: adc_current_sensor.py
+Files stock/klippy/extras/adc_temperature.py and vendor/klippy/extras/adc_temperature.py differ
+Only in vendor/klippy/extras: auto_screws_tilt_adjust.py
+Files stock/klippy/extras/bed_mesh.py and vendor/klippy/extras/bed_mesh.py differ
+Files stock/klippy/extras/buttons.py and vendor/klippy/extras/buttons.py differ
+Files stock/klippy/extras/error_mcu.py and vendor/klippy/extras/error_mcu.py differ
+Only in vendor/klippy/extras: extruder_config_bak.py
+Files stock/klippy/extras/fan_generic.py and vendor/klippy/extras/fan_generic.py differ
+Files stock/klippy/extras/fan.py and vendor/klippy/extras/fan.py differ
+Only in vendor/klippy/extras: filament_detect.py
+Only in vendor/klippy/extras: filament_entangle_detect.py
+Only in vendor/klippy/extras: filament_feed_fac_test.py
+Only in vendor/klippy/extras: filament_feed.py
+Files stock/klippy/extras/filament_motion_sensor.py and vendor/klippy/extras/filament_motion_sensor.py differ
+Only in vendor/klippy/extras: filament_parameters.py
+Only in vendor/klippy/extras: filament_protocol.py
+Files stock/klippy/extras/filament_switch_sensor.py and vendor/klippy/extras/filament_switch_sensor.py differ
+Only in vendor/klippy/extras: flow_calculator.cpython-311-aarch64-linux-gnu.so
+Only in vendor/klippy/extras: flow_calibrator.py
+Only in vendor/klippy/extras: fm175xx_reader.py
+Files stock/klippy/extras/gcode_arcs.py and vendor/klippy/extras/gcode_arcs.py differ
+Files stock/klippy/extras/gcode_move.py and vendor/klippy/extras/gcode_move.py differ
+Files stock/klippy/extras/heater_bed.py and vendor/klippy/extras/heater_bed.py differ
+Files stock/klippy/extras/heater_fan.py and vendor/klippy/extras/heater_fan.py differ
+Files stock/klippy/extras/heaters.py and vendor/klippy/extras/heaters.py differ
+Only in vendor/klippy/extras: homing_precise_corexy.py
+Files stock/klippy/extras/homing.py and vendor/klippy/extras/homing.py differ
+Only in vendor/klippy/extras: homing_xyz_override.py
+Files stock/klippy/extras/idle_timeout.py and vendor/klippy/extras/idle_timeout.py differ
+Only in vendor/klippy/extras: inductance_coil.py
+Files stock/klippy/extras/input_shaper.py and vendor/klippy/extras/input_shaper.py differ
+Files stock/klippy/extras/led.py and vendor/klippy/extras/led.py differ
+Files stock/klippy/extras/lis2dw.py and vendor/klippy/extras/lis2dw.py differ
+Only in vendor/klippy/extras: machine_state_manager.py
+Files stock/klippy/extras/motion_report.py and vendor/klippy/extras/motion_report.py differ
+Only in vendor/klippy/extras: park_detector.py
+Files stock/klippy/extras/pause_resume.py and vendor/klippy/extras/pause_resume.py differ
+Files stock/klippy/extras/pid_calibrate.py and vendor/klippy/extras/pid_calibrate.py differ
+Only in vendor/klippy/extras: power_loss_check.py
+Files stock/klippy/extras/print_stats.py and vendor/klippy/extras/print_stats.py differ
+Only in vendor/klippy/extras: print_task_config.py
+Only in vendor/klippy/extras: probe_inductance_coil.py
+Files stock/klippy/extras/pulse_counter.py and vendor/klippy/extras/pulse_counter.py differ
+Only in vendor/klippy/extras: purifier.py
+Files stock/klippy/extras/resonance_tester.py and vendor/klippy/extras/resonance_tester.py differ
+Only in vendor/klippy/extras: setup.py
+Files stock/klippy/extras/shaper_calibrate.py and vendor/klippy/extras/shaper_calibrate.py differ
+Files stock/klippy/extras/statistics.py and vendor/klippy/extras/statistics.py differ
+Files stock/klippy/extras/temperature_sensor.py and vendor/klippy/extras/temperature_sensor.py differ
+Files stock/klippy/extras/temperature_sensors.cfg and vendor/klippy/extras/temperature_sensors.cfg differ
+Only in vendor/klippy/extras: timelapse.py
+Files stock/klippy/extras/tmc2130.py and vendor/klippy/extras/tmc2130.py differ
+Files stock/klippy/extras/tmc2208.py and vendor/klippy/extras/tmc2208.py differ
+Files stock/klippy/extras/tmc2209.py and vendor/klippy/extras/tmc2209.py differ
+Files stock/klippy/extras/tmc2240.py and vendor/klippy/extras/tmc2240.py differ
+Files stock/klippy/extras/tmc2660.py and vendor/klippy/extras/tmc2660.py differ
+Files stock/klippy/extras/tmc5160.py and vendor/klippy/extras/tmc5160.py differ
+Files stock/klippy/extras/tmc.py and vendor/klippy/extras/tmc.py differ
+Files stock/klippy/extras/tmc_uart.py and vendor/klippy/extras/tmc_uart.py differ
+Files stock/klippy/extras/verify_heater.py and vendor/klippy/extras/verify_heater.py differ
+Files stock/klippy/extras/virtual_sdcard.py and vendor/klippy/extras/virtual_sdcard.py differ
+Files stock/klippy/gcode.py and vendor/klippy/gcode.py differ
+Files stock/klippy/kinematics/corexy.py and vendor/klippy/kinematics/corexy.py differ
+Files stock/klippy/kinematics/extruder.py and vendor/klippy/kinematics/extruder.py differ
+Files stock/klippy/klippy.py and vendor/klippy/klippy.py differ
+Files stock/klippy/mcu.py and vendor/klippy/mcu.py differ
+Files stock/klippy/msgproto.py and vendor/klippy/msgproto.py differ
+Files stock/klippy/pins.py and vendor/klippy/pins.py differ
+Only in vendor/klippy: printer_device_scan.py
+Only in vendor/klippy: queuefile.py
+Files stock/klippy/queuelogger.py and vendor/klippy/queuelogger.py differ
+Files stock/klippy/serialhdl.py and vendor/klippy/serialhdl.py differ
+Files stock/klippy/stepper.py and vendor/klippy/stepper.py differ
+Files stock/klippy/toolhead.py and vendor/klippy/toolhead.py differ
+Files stock/klippy/util.py and vendor/klippy/util.py differ
+Files stock/klippy/webhooks.py and vendor/klippy/webhooks.py differ
+Files stock/scripts/motan/data_logger.py and vendor/scripts/motan/data_logger.py differ
+Only in vendor/scripts/motan: lava_flow_cali_calc.py
+Only in vendor/scripts/motan: lava_flow_cali.py
+Only in vendor/scripts/motan: lava_flow_freq_calc.py
+Files stock/scripts/motan/readlog.py and vendor/scripts/motan/readlog.py differ
