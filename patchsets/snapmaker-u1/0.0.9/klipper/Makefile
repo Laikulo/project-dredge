@@ -11,7 +11,7 @@ worktree:
 		git checkout $(file < stock.ref) && \
 		git checkout -b vendor && \
 		git tag fork-start && \
-		../patch2commit ../patches )
+		../../../../../tools/patch2commit ../patches )
 
 rebuild-patches:
 	(cd worktree && git format-patch --no-stat --no-attach --no-signature -o ../patches fork-start)
