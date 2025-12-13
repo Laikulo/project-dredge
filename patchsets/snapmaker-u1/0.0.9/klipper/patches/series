@@ -5,4 +5,6 @@
 0005-tmc-baud-rate-9600.patch
 0006-tmc-round-temp.patch
 0007-tmc-expose-query-phase.patch
+0008-sched-fifo.patch
+0009-switch-user-on-start.patch
 9999-none-of-the-above.patch

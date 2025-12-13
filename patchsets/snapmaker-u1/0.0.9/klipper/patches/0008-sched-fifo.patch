@@ -1,0 +1,40 @@
+--- a/klippy/klippy.py
++++ b/klippy/klippy.py
+@@ -22,6 +22,8 @@ command to reload the config and restart the host software.
+ Printer is halted
+ """
+ 
++SCHED_FIFO_PRIORITY = 10  # SCHED_FIFO priority for the main thread
++
+ class Printer:
+     config_error = configfile.error
+     command_error = gcode.CommandError
+@@ -466,6 +468,22 @@ def arg_dictionary(option, opt_str, value, parser):
+         parser.values.dictionary = {}
+     parser.values.dictionary[key] = fname
+ 
++def set_sched_fifo():
++    try:
++        import ctypes
++        SCHED_FIFO = 1
++        class sched_param(ctypes.Structure):
++            _fields_ = [('sched_priority', ctypes.c_int)]
++        param = sched_param(SCHED_FIFO_PRIORITY)
++        libc = ctypes.CDLL('libc.so.6')
++        res = libc.sched_setscheduler(0, SCHED_FIFO, ctypes.byref(param))
++        if res != 0:
++            logging.warning('Failed to set SCHED_FIFO, permission denied or not supported.')
++        else:
++            logging.info('SCHED_FIFO set successfully with priority %d', SCHED_FIFO_PRIORITY)
++    except Exception as e:
++        logging.warning('Exception setting SCHED_FIFO: %s', e)
++
+ def main():
+     usage = "%prog [options] <config file>"
+     opts = optparse.OptionParser(usage)
+@@ -575,4 +593,5 @@ def main():
+         sys.exit(-1)
+ 
+ if __name__ == '__main__':
++    set_sched_fifo()
+     main()

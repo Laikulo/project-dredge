@@ -1,0 +1,80 @@
+--- a/klippy/klippy.py
++++ b/klippy/klippy.py
+@@ -5,6 +5,7 @@
+ #
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+ import sys, os, gc, optparse, logging, time, collections, importlib
++import pwd, grp
+ import util, reactor, queuelogger, msgproto
+ import gcode, configfile, pins, mcu, toolhead, webhooks
+ 
+@@ -484,6 +485,58 @@ def set_sched_fifo():
+     except Exception as e:
+         logging.warning('Exception setting SCHED_FIFO: %s', e)
+ 
++def switch_user_group(user_name):
++    """Switch the process to run as the specified user and group."""
++    if user_name is None:
++        return
++
++    try:
++        # Get current user info to check if we need to switch
++        current_uid = os.getuid()
++        current_user = pwd.getpwuid(current_uid).pw_name
++
++        # If already running as the target user, no need to switch
++        if current_user == user_name:
++            logging.info("Already running as user '%s'", user_name)
++            return
++
++        # Only root can switch to another user
++        if current_uid != 0:
++            logging.warning("Cannot switch to user '%s': not running as root", user_name)
++            return
++
++        # Get user and group information
++        try:
++            user_info = pwd.getpwnam(user_name)
++        except KeyError:
++            logging.error("User '%s' not found", user_name)
++            return
++
++        user_uid = user_info.pw_uid
++        user_gid = user_info.pw_gid
++        user_home = user_info.pw_dir
++
++        # Get supplementary groups for the user
++        groups = [g.gr_gid for g in grp.getgrall() if user_name in g.gr_mem]
++        groups.append(user_gid)  # Add primary group
++
++        # Switch to the new user and group
++        os.setgroups(groups)  # Set supplementary groups
++        os.setregid(user_gid, user_gid)  # Set real and effective group ID
++        os.setreuid(user_uid, user_uid)  # Set real and effective user ID
++
++        # Set HOME environment variable
++        os.environ['HOME'] = user_home
++        os.environ['USER'] = user_name
++
++        logging.info("Successfully switched to user '%s' (uid=%d, gid=%d)",
++                    user_name, user_uid, user_gid)
++
++    except OSError as e:
++        logging.error("Failed to switch to user '%s': %s", user_name, str(e))
++    except Exception as e:
++        logging.error("Unexpected error switching to user '%s': %s", user_name, str(e))
++
+ def main():
+     usage = "%prog [options] <config file>"
+     opts = optparse.OptionParser(usage)
+@@ -505,7 +558,10 @@ def main():
+                     help="file to read for mcu protocol dictionary")
+     opts.add_option("--import-test", action="store_true",
+                     help="perform an import module test")
++    opts.add_option("-u", "--user", dest="run_user", default="lava",
++                    help="run as user (default: lava)")
+     options, args = opts.parse_args()
++    switch_user_group(options.run_user)
+     if options.import_test:
+         import_test()
+     if len(args) != 1:
