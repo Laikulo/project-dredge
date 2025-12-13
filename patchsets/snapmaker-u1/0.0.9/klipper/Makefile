@@ -14,8 +14,5 @@ worktree:
 		git apply ../patches/9999-*.patch && \
 		git tag work-start )
 
-
 rebuild-allother:
 	(cd worktree && git stash show -p -u) | sed '/^diff --git/d;/^index/d;/^new file/d' > patches/9999-none-of-the-above.patch
-
-
