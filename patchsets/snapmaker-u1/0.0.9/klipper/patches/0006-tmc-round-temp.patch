@@ -1,0 +1,11 @@
+--- a/klippy/extras/tmc.py
++++ b/klippy/extras/tmc.py
+@@ -214,7 +214,7 @@ class TMCErrorCheck:
+             return {'drv_status': None, 'temperature': None}
+         temp = None
+         if self.adc_temp is not None:
+-            temp = round((self.adc_temp - 2038) / 7.7, 2)
++            temp = round((self.adc_temp - 2038) / 7.7, 0)
+         last_value, reg_name = self.drv_status_reg_info[:2]
+         if last_value != self.last_drv_status:
+             self.last_drv_status = last_value

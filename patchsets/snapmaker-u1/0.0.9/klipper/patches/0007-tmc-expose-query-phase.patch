@@ -1,0 +1,60 @@
+--- a/klippy/extras/tmc2130.py
++++ b/klippy/extras/tmc2130.py
+@@ -294,6 +294,7 @@ class TMC2130:
+         cmdhelper.setup_register_dump(ReadRegisters)
+         self.get_phase_offset = cmdhelper.get_phase_offset
+         self.get_status = cmdhelper.get_status
++        self.query_phase = cmdhelper._query_phase
+         # Setup basic register values
+         tmc.TMCWaveTableHelper(config, self.mcu_tmc)
+         tmc.TMCStealthchopHelper(config, self.mcu_tmc)
+--- a/klippy/extras/tmc2208.py
++++ b/klippy/extras/tmc2208.py
+@@ -195,6 +195,7 @@ class TMC2208:
+         cmdhelper.setup_register_dump(ReadRegisters, self.read_translate)
+         self.get_phase_offset = cmdhelper.get_phase_offset
+         self.get_status = cmdhelper.get_status
++        self.query_phase = cmdhelper._query_phase
+         # Setup basic register values
+         self.fields.set_field("mstep_reg_select", True)
+         tmc.TMCStealthchopHelper(config, self.mcu_tmc)
+--- a/klippy/extras/tmc2209.py
++++ b/klippy/extras/tmc2209.py
+@@ -71,6 +71,7 @@ class TMC2209:
+         cmdhelper.setup_register_dump(ReadRegisters)
+         self.get_phase_offset = cmdhelper.get_phase_offset
+         self.get_status = cmdhelper.get_status
++        self.query_phase = cmdhelper._query_phase
+         # Setup basic register values
+         self.fields.set_field("mstep_reg_select", True)
+         tmc.TMCStealthchopHelper(config, self.mcu_tmc)
+--- a/klippy/extras/tmc2240.py
++++ b/klippy/extras/tmc2240.py
+@@ -361,6 +361,7 @@ class TMC2240:
+         cmdhelper.setup_register_dump(ReadRegisters)
+         self.get_phase_offset = cmdhelper.get_phase_offset
+         self.get_status = cmdhelper.get_status
++        self.query_phase = cmdhelper._query_phase
+         # Setup basic register values
+         tmc.TMCWaveTableHelper(config, self.mcu_tmc)
+         self.fields.set_config_field(config, "offset_sin90", 0)
+--- a/klippy/extras/tmc2660.py
++++ b/klippy/extras/tmc2660.py
+@@ -241,6 +241,7 @@ class TMC2660:
+         cmdhelper.setup_register_dump(ReadRegisters)
+         self.get_phase_offset = cmdhelper.get_phase_offset
+         self.get_status = cmdhelper.get_status
++        self.query_phase = cmdhelper._query_phase
+ 
+         # CHOPCONF
+         set_config_field = self.fields.set_config_field
+--- a/klippy/extras/tmc5160.py
++++ b/klippy/extras/tmc5160.py
+@@ -336,6 +336,7 @@ class TMC5160:
+         cmdhelper.setup_register_dump(ReadRegisters)
+         self.get_phase_offset = cmdhelper.get_phase_offset
+         self.get_status = cmdhelper.get_status
++        self.query_phase = cmdhelper._query_phase
+         # Setup basic register values
+         tmc.TMCWaveTableHelper(config, self.mcu_tmc)
+         tmc.TMCStealthchopHelper(config, self.mcu_tmc)

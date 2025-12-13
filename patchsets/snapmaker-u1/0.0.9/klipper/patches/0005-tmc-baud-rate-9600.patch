@@ -1,0 +1,11 @@
+--- a/klippy/extras/tmc_uart.py
++++ b/klippy/extras/tmc_uart.py
+@@ -70,7 +70,7 @@ def lookup_tmc_uart_mutex(mcu):
+         pmutexes.mcu_to_mutex[mcu] = mutex
+     return mutex
+ 
+-TMC_BAUD_RATE = 40000
++TMC_BAUD_RATE = 9600
+ TMC_BAUD_RATE_AVR = 9000
+ 
+ # Code for sending messages on a TMC uart

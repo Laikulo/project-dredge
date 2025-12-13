@@ -2,4 +2,7 @@
 0002-chelper-def-updates.patch
 0003-exception-mananager-and-coded-exceptions.patch
 0004-make-restarts-on-save-config-optional.patch
+0005-tmc-baud-rate-9600.patch
+0006-tmc-round-temp.patch
+0007-tmc-expose-query-phase.patch
 9999-none-of-the-above.patch
