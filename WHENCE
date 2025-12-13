@@ -1,2 +1,3 @@
 vendor/rk2918_tools: https://github.com/crosstyan/rk2918_tools
 vendor/upfile: https://github.com/paxx12/SnapmakerU1-Extended-Firmware
+vendor/splitpatch: https://github.com/jaalto/splitpatch
