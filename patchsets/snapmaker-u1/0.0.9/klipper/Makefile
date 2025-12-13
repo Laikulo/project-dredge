@@ -3,6 +3,7 @@ quilttree:
 	mkdir quilttree
 	curl --fail -L -'#' "https://github.com/Klipper3d/klipper/archive/$(file < stock.ref).tar.gz" | tar -xz --strip-components 1 -C quilttree
 	ln -s ../patches quilttree/patches
+	( cd quilttree && quilt push -a )
 
 worktree:
 	git clone http://github.com/klipper3d/klipper.git --no-checkout --filter blob:none worktree
