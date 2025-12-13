@@ -6,6 +6,7 @@ UPDATE_IMG=$(FW_BASE)-upgrade.d/update.img
 extract: outputs/moonraker.tar outputs/klipper.tar
 
 UPFILE_NAMES=at32f403a.bin at32f415.bin MCU_DESC update.img UPFILE_BUILD_DATE UPFILE_VERSION
+CLOSEST_KLIPPER=248d3dbf8bcda69a51e3a303862bbcc64a32119d
 
 
 %: %.url
@@ -23,19 +24,11 @@ $(FW_BASE)-afp.d/rootfs.img: $(FW_BASE)-rk.d/update.img
 	[[ -d $(dir $@) ]] || mkdir $(dir $@)
 	$(AFPTOOL) -unpack $< $(dir $@)
 
-# TODO: rewrite these to use virt-tar-out
 outputs/klipper.tar: $(FW_BASE)-afp.d/rootfs.img
-	$(eval tempdir = $(shell mktemp -d))
-	unsquashfs -dest "$(tempdir)" "$<" home/lava/klipper
-	tar -cf "$@" -C"$(tempdir)"/home/lava klipper
-	rm -rf "$(tempdir)"
-
+	virt-tar-out -a $< /home/lava/klipper $@
 
 outputs/moonraker.tar: $(FW_BASE)-afp.d/rootfs.img
-	$(eval tempdir = $(shell mktemp -d))
-	unsquashfs -dest "$(tempdir)" "$<" home/lava/moonraker
-	tar -cf "$@" -C"$(tempdir)"/home/lava moonraker
-	rm -rf "$(tempdir)"
+	virt-tar-out -a $< /home/lava/moonraker $@
 
 outputs/rootfs.tar: $(FW_BASE)-afp.d/rootfs.img
 	virt-tar-out -a $< / $@
