@@ -21,4 +21,11 @@ rebuild-patches:
 	sed '/^diff --git/d;/^index /d' -i patches/*.patch
 
 rebuild-allother:
+	(cd worktree && git stash -u)
 	(cd worktree && git stash show -p -u) | sed '/^diff --git/d;/^index/d;/^new file/d' > patches/9999-none-of-the-above.patch
+	(cd worktree && git stash pop)
+
+rebuild-series: | rebuild-patches rebuild-allother
+	(cd patches && ls *.patch > series)
+
+rebuild-full: rebuild-patches rebuild-allother rebuild-series
