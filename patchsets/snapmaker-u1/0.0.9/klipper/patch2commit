@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+for i in ${1:?path required}/*.patch; do
+	if [[ $i =~ [/^]([0-9]{4})-(.*)\.patch ]]; then
+		patch_num="${BASH_REMATCH[1]}"
+		patch_msg="${BASH_REMATCH[2]}"
+		if [[ $patch_num -ne 9999 ]]; then
+			git apply --index "$i"
+			git commit -m "$patch_msg"
+		else
+			# Do not stage the all-others patch
+			git apply "$i"
+		fi
+	else
+		echo >&2 "Unparsable name $i"
+	fi
+done
