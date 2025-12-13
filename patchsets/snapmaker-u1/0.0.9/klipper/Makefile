@@ -10,10 +10,14 @@ worktree:
 		git checkout $(file < stock.ref) && \
 		git checkout -b vendor && \
 		git tag fork-start && \
-		git apply --index ../patches/0*.patch && \
-		git commit -m "workdir_start" && \
-		git apply ../patches/9999-*.patch && \
-		git tag work-start )
+		../patch2commit ../patches )
+
+rebuild-patches:
+	(cd worktree && git format-patch --no-stat --no-attach --no-signature -o ../patches fork-start)
+	# Remove header
+	sed -n '/^--- /,$$p' -i patches/*.patch
+	# Remove git and index lines
+	sed '/^diff --git/d;/^index /d' -i patches/*.patch
 
 rebuild-allother:
 	(cd worktree && git stash show -p -u) | sed '/^diff --git/d;/^index/d;/^new file/d' > patches/9999-none-of-the-above.patch
