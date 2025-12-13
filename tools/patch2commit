@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
+shopt -s extglob
+
 for i in ${1:?path required}/*.patch; do
 	if [[ $i =~ [/^]([0-9]{4})-(.*)\.patch ]]; then
-		patch_num="${BASH_REMATCH[1]}"
+		patch_num="${BASH_REMATCH[1]##+(0)}"
 		patch_msg="${BASH_REMATCH[2]}"
 		if [[ $patch_num -ne 9999 ]]; then
 			git apply --index "$i"
