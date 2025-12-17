@@ -89,13 +89,13 @@ container: outputs/rootfs.tar
 	
 
 # TODO: Consider making a lib function for this
-RK2918_DIR=../../../vendor/rk2918_tools
+RK2918_DIR=../../../tools/vendor/rk2918_tools
 IMG_UNPACK=$(RK2918_DIR)/bin/img_unpack
 AFPTOOL=$(RK2918_DIR)/bin/afptool
 $(RK2918_DIR)/bin/img_unpack $(RK2918_DIR)/bin/afptool &:
 	make -C $(RK2918_DIR)
 
-UPFILE_DIR=../../../vendor/upfile
+UPFILE_DIR=../../../tools/vendor/upfile
 UPFILE=$(UPFILE_DIR)/bin/upfile
 $(UPFILE)/bin/upfile:
 	make -C $(UPFILE_DIR)
