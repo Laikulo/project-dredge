@@ -18,8 +18,6 @@ Only in vendor-klipper/config: K1_MAX_SE_CR4CU220812S12
 Files stock-klipper/config/printer-creality-ender3-s1-2021.cfg and vendor-klipper/config/printer-creality-ender3-s1-2021.cfg differ
 Files stock-klipper/docs/Config_Changes.md and vendor-klipper/docs/Config_Changes.md differ
 Files stock-klipper/docs/Config_Reference.md and vendor-klipper/docs/Config_Reference.md differ
-Only in vendor-klipper: fw
-Only in vendor-klipper: gcodes
 Files stock-klipper/.gitignore and vendor-klipper/.gitignore differ
 Only in vendor-klipper: .gitmodules
 Only in vendor-klipper/klippy/chelper: c_helper.so
@@ -164,9 +162,7 @@ Files stock-klipper/klippy/stepper.py and vendor-klipper/klippy/stepper.py diffe
 Files stock-klipper/klippy/toolhead.py and vendor-klipper/klippy/toolhead.py differ
 Files stock-klipper/klippy/util.py and vendor-klipper/klippy/util.py differ
 Files stock-klipper/klippy/webhooks.py and vendor-klipper/klippy/webhooks.py differ
-Only in stock-klipper: lib
 Files stock-klipper/Makefile and vendor-klipper/Makefile differ
 Files stock-klipper/scripts/spi_flash/board_defs.py and vendor-klipper/scripts/spi_flash/board_defs.py differ
-Only in stock-klipper: src
 Only in vendor-klipper: tool
 Only in vendor-klipper: .vscode
