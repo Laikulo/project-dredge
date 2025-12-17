@@ -1,0 +1,58 @@
+git bisect start
+# status: waiting for both good and bad commits
+# old: [e02b725602067a2cd098a62be9a4bb10fc74a9bd] docs: Note the release of v0.11.0
+git bisect old e02b725602067a2cd098a62be9a4bb10fc74a9bd
+# status: waiting for bad commit, 1 good commit known
+# old: [e02b725602067a2cd098a62be9a4bb10fc74a9bd] docs: Note the release of v0.11.0
+git bisect old e02b725602067a2cd098a62be9a4bb10fc74a9bd
+# status: waiting for bad commit, 1 good commit known
+# new: [0d67d9c45d2dc39f8b4be7d1bb54b94b2698a2b6] docs: Note the release of v0.12.0
+git bisect new 0d67d9c45d2dc39f8b4be7d1bb54b94b2698a2b6
+# new: [9fe3152e23e6637c549006165168a9b8545f3542] config: Add config printer-sovol-sv05-2022.cfg (#6122)
+git bisect new 9fe3152e23e6637c549006165168a9b8545f3542
+# old: [e631840ad6e7e186a3a568c9e1366f419b8dc778] scripts: add systemd klipper-mcu.service example
+git bisect old e631840ad6e7e186a3a568c9e1366f419b8dc778
+# new: [b7978d37b360fb270782a8db5d690342654e6977] ar100: Support for ar100 (#6054)
+git bisect new b7978d37b360fb270782a8db5d690342654e6977
+# new: [4cd5e9d222417430176a67b4787eba71d57cfd10] config: Update printer-creality-ender2pro-2021.cfg (#6023)
+git bisect new 4cd5e9d222417430176a67b4787eba71d57cfd10
+# skip: [cefbad9ef4cea82c6bc006b1f78f174f69bc594e] stm32: Reduce read-modify-write of CR in stm32h7_adc.c init
+git bisect skip cefbad9ef4cea82c6bc006b1f78f174f69bc594e
+# skip: [33f973e4523a0d86110bef19e9e0de6a8092ade1] stm32: Don't set boost nor linear calibration on stm32h723 adc3
+git bisect skip 33f973e4523a0d86110bef19e9e0de6a8092ade1
+# skip: [876c3ffffdce78b1cdc976b572fe1eca9b97fe44] stm32: No need to use hardware oversampling in stm32h7_adc.c
+git bisect skip 876c3ffffdce78b1cdc976b572fe1eca9b97fe44
+# skip: [d372f913efb84b2303aff9906caeed44d9b37069] stm32: Don't use read-modify-write on ISR register in stm32h7_adc.c
+git bisect skip d372f913efb84b2303aff9906caeed44d9b37069
+# skip: [f571618376eaa97d4dcbb79282544ef89da1a0ad] stm32: Simplify setting of 12bit mode on stm32h7 in stm32h7_adc.c
+git bisect skip f571618376eaa97d4dcbb79282544ef89da1a0ad
+# new: [3935f78543867d8a0587bb07ad1f3beeeb600b4c] scripts: Update update_mks_robin.py for Python3 (#5985)
+git bisect new 3935f78543867d8a0587bb07ad1f3beeeb600b4c
+# skip: [1034f191348fb58a34ff2dbcfc37bf3976f54c68] stm32: Simplify setting of adc_common fields in stm32h7_adc.c
+git bisect skip 1034f191348fb58a34ff2dbcfc37bf3976f54c68
+# skip: [efdc29f5892e2da869ae1c0038f8b3cc8dc23d5c] stm32: Simplify CFGR register setup in stm32h7_adc.c
+git bisect skip efdc29f5892e2da869ae1c0038f8b3cc8dc23d5c
+# skip: [cef0b70c8814b67a376d2574e62b8e221cc94e89] stm32: Move clock line mapping from stm32h7_adc.c to lookup_clock_line()
+git bisect skip cef0b70c8814b67a376d2574e62b8e221cc94e89
+# skip: [51526fd627d603f209a5ac64f0f533846b4dfec4] stm32: ADC timing rework and fixes in stm32h7_adc.c
+git bisect skip 51526fd627d603f209a5ac64f0f533846b4dfec4
+# skip: [0bf073ba08461ce2d3e38d7d380a08b83ea9e30f] stm32: Use a consistent bank size of 20 across all chips in stm32h7_adc.c
+git bisect skip 0bf073ba08461ce2d3e38d7d380a08b83ea9e30f
+# skip: [80943d3846f6952081f4a04f223551b3c80825b3] stm32: Increase sample time in stm32h7_adc.c
+git bisect skip 80943d3846f6952081f4a04f223551b3c80825b3
+# skip: [9b7dcfa3337b4874c92e9009b323f828a06ff5a4] stm32: No need for LDORDY check in stm32h7_adc.c
+git bisect skip 9b7dcfa3337b4874c92e9009b323f828a06ff5a4
+# only skipped commits left to test
+# possible first new commit: [3935f78543867d8a0587bb07ad1f3beeeb600b4c] scripts: Update update_mks_robin.py for Python3 (#5985)
+# possible first new commit: [80943d3846f6952081f4a04f223551b3c80825b3] stm32: Increase sample time in stm32h7_adc.c
+# possible first new commit: [33f973e4523a0d86110bef19e9e0de6a8092ade1] stm32: Don't set boost nor linear calibration on stm32h723 adc3
+# possible first new commit: [cefbad9ef4cea82c6bc006b1f78f174f69bc594e] stm32: Reduce read-modify-write of CR in stm32h7_adc.c init
+# possible first new commit: [d372f913efb84b2303aff9906caeed44d9b37069] stm32: Don't use read-modify-write on ISR register in stm32h7_adc.c
+# possible first new commit: [51526fd627d603f209a5ac64f0f533846b4dfec4] stm32: ADC timing rework and fixes in stm32h7_adc.c
+# possible first new commit: [cef0b70c8814b67a376d2574e62b8e221cc94e89] stm32: Move clock line mapping from stm32h7_adc.c to lookup_clock_line()
+# possible first new commit: [1034f191348fb58a34ff2dbcfc37bf3976f54c68] stm32: Simplify setting of adc_common fields in stm32h7_adc.c
+# possible first new commit: [0bf073ba08461ce2d3e38d7d380a08b83ea9e30f] stm32: Use a consistent bank size of 20 across all chips in stm32h7_adc.c
+# possible first new commit: [f571618376eaa97d4dcbb79282544ef89da1a0ad] stm32: Simplify setting of 12bit mode on stm32h7 in stm32h7_adc.c
+# possible first new commit: [876c3ffffdce78b1cdc976b572fe1eca9b97fe44] stm32: No need to use hardware oversampling in stm32h7_adc.c
+# possible first new commit: [efdc29f5892e2da869ae1c0038f8b3cc8dc23d5c] stm32: Simplify CFGR register setup in stm32h7_adc.c
+# possible first new commit: [9b7dcfa3337b4874c92e9009b323f828a06ff5a4] stm32: No need for LDORDY check in stm32h7_adc.c

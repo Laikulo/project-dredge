@@ -1,7 +1,0 @@
-3935f785 scripts: Update update_mks_robin.py for Python3 (#5985)
-80943d38 stm32: Increase sample time in stm32h7_adc.c
-33f973e4 stm32: Don't set boost nor linear calibration on stm32h723 adc3
-cefbad9e stm32: Reduce read-modify-write of CR in stm32h7_adc.c init
-d372f913 stm32: Don't use read-modify-write on ISR register in stm32h7_adc.c
-51526fd6 stm32: ADC timing rework and fixes in stm32h7_adc.c
-cef0b70c stm32: Move clock line mapping from stm32h7_adc.c to lookup_clock_line()
