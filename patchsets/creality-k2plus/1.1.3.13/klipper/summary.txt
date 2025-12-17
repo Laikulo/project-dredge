@@ -1,0 +1,172 @@
+Only in vendor-klipper/config: F008
+Only in vendor-klipper/config: F008_CR0CN240319C13
+Only in vendor-klipper/config: F008_CR0CN240319C13_1
+Only in vendor-klipper/config: F012_CR0CN200400C10
+Only in vendor-klipper/config: F012_CR0CN240319C13
+Only in vendor-klipper/config: F021_CR0CN200400C10
+Only in vendor-klipper/config: F021_CR0CN240319C13
+Only in vendor-klipper/config: GS_01_CR4CU220812S12
+Only in vendor-klipper/config: GS_03_CR0CN240319C13
+Only in vendor-klipper/config: K1C_CR4CU220812S12
+Only in vendor-klipper/config: K1_CR4CU220812S10
+Only in vendor-klipper/config: K1_CR4CU220812S11
+Only in vendor-klipper/config: K1_CR4CU220812S12
+Only in vendor-klipper/config: K1_MAX_CR0CN240110C10
+Only in vendor-klipper/config: K1_MAX_CR4CU220812S11
+Only in vendor-klipper/config: K1_MAX_CR4CU220812S12
+Only in vendor-klipper/config: K1_MAX_SE_CR4CU220812S12
+Files stock-klipper/config/printer-creality-ender3-s1-2021.cfg and vendor-klipper/config/printer-creality-ender3-s1-2021.cfg differ
+Files stock-klipper/docs/Config_Changes.md and vendor-klipper/docs/Config_Changes.md differ
+Files stock-klipper/docs/Config_Reference.md and vendor-klipper/docs/Config_Reference.md differ
+Only in vendor-klipper: fw
+Only in vendor-klipper: gcodes
+Files stock-klipper/.gitignore and vendor-klipper/.gitignore differ
+Only in vendor-klipper: .gitmodules
+Only in vendor-klipper/klippy/chelper: c_helper.so
+Only in vendor-klipper/klippy/chelper: filament_change.h
+Only in vendor-klipper/klippy/chelper: filament_change.o
+Files stock-klipper/klippy/chelper/__init__.py and vendor-klipper/klippy/chelper/__init__.py differ
+Only in vendor-klipper/klippy/chelper: Makefile
+Only in vendor-klipper/klippy/chelper: msgblock_485.h
+Only in vendor-klipper/klippy/chelper: msgblock_485.o
+Only in vendor-klipper/klippy/chelper: serial_485_queue.h
+Only in vendor-klipper/klippy/chelper: serial_485_queue.o
+Files stock-klipper/klippy/chelper/serialqueue.c and vendor-klipper/klippy/chelper/serialqueue.c differ
+Files stock-klipper/klippy/chelper/stepcompress.c and vendor-klipper/klippy/chelper/stepcompress.c differ
+Files stock-klipper/klippy/chelper/trapq.c and vendor-klipper/klippy/chelper/trapq.c differ
+Files stock-klipper/klippy/chelper/trapq.h and vendor-klipper/klippy/chelper/trapq.h differ
+Files stock-klipper/klippy/clocksync.py and vendor-klipper/klippy/clocksync.py differ
+Files stock-klipper/klippy/configfile.py and vendor-klipper/klippy/configfile.py differ
+Files stock-klipper/klippy/console.py and vendor-klipper/klippy/console.py differ
+Only in stock-klipper/klippy/extras: ad5206.py
+Files stock-klipper/klippy/extras/adc_scaled.py and vendor-klipper/klippy/extras/adc_scaled.py differ
+Files stock-klipper/klippy/extras/adc_temperature.py and vendor-klipper/klippy/extras/adc_temperature.py differ
+Files stock-klipper/klippy/extras/adxl345.py and vendor-klipper/klippy/extras/adxl345.py differ
+Only in stock-klipper/klippy/extras: angle.py
+Only in vendor-klipper/klippy/extras: auto_addr.py
+Only in vendor-klipper/klippy/extras: auto_addr_wrapper.py
+Only in vendor-klipper/klippy/extras: base_info.py
+Files stock-klipper/klippy/extras/bed_mesh.py and vendor-klipper/klippy/extras/bed_mesh.py differ
+Only in stock-klipper/klippy/extras: bed_screws.py
+Only in stock-klipper/klippy/extras: bed_tilt.py
+Only in vendor-klipper/klippy/extras: belt_mdl.py
+Only in vendor-klipper/klippy/extras: bl24c16f.py
+Only in stock-klipper/klippy/extras: bltouch.py
+Only in stock-klipper/klippy/extras: bme280.py
+Only in vendor-klipper/klippy/extras: box.py
+Only in vendor-klipper/klippy/extras: box_wrapper.cpython-39.so
+Files stock-klipper/klippy/extras/bus.py and vendor-klipper/klippy/extras/bus.py differ
+Only in stock-klipper/klippy/extras: canbus_ids.py
+Files stock-klipper/klippy/extras/controller_fan.py and vendor-klipper/klippy/extras/controller_fan.py differ
+Only in vendor-klipper/klippy/extras: custom_macro.py
+Only in stock-klipper/klippy/extras: dac084S085.py
+Only in vendor-klipper/klippy/extras: dirzctl.py
+Only in stock-klipper/klippy/extras: display
+Only in stock-klipper/klippy/extras: ds18b20.py
+Files stock-klipper/klippy/extras/endstop_phase.py and vendor-klipper/klippy/extras/endstop_phase.py differ
+Files stock-klipper/klippy/extras/exclude_object.py and vendor-klipper/klippy/extras/exclude_object.py differ
+Only in vendor-klipper/klippy/extras: fan_feedback.py
+Files stock-klipper/klippy/extras/fan.py and vendor-klipper/klippy/extras/fan.py differ
+Only in vendor-klipper/klippy/extras: filament_rack.py
+Only in vendor-klipper/klippy/extras: filament_rack_wrapper.cpython-39.so
+Files stock-klipper/klippy/extras/filament_switch_sensor.py and vendor-klipper/klippy/extras/filament_switch_sensor.py differ
+Only in vendor-klipper/klippy/extras: filter.py
+Files stock-klipper/klippy/extras/force_move.py and vendor-klipper/klippy/extras/force_move.py differ
+Files stock-klipper/klippy/extras/gcode_macro.py and vendor-klipper/klippy/extras/gcode_macro.py differ
+Files stock-klipper/klippy/extras/gcode_move.py and vendor-klipper/klippy/extras/gcode_move.py differ
+Files stock-klipper/klippy/extras/heater_bed.py and vendor-klipper/klippy/extras/heater_bed.py differ
+Files stock-klipper/klippy/extras/heater_fan.py and vendor-klipper/klippy/extras/heater_fan.py differ
+Files stock-klipper/klippy/extras/heaters.py and vendor-klipper/klippy/extras/heaters.py differ
+Files stock-klipper/klippy/extras/homing_heaters.py and vendor-klipper/klippy/extras/homing_heaters.py differ
+Files stock-klipper/klippy/extras/homing_override.py and vendor-klipper/klippy/extras/homing_override.py differ
+Files stock-klipper/klippy/extras/homing.py and vendor-klipper/klippy/extras/homing.py differ
+Only in stock-klipper/klippy/extras: htu21d.py
+Only in vendor-klipper/klippy/extras: hx711s.py
+Files stock-klipper/klippy/extras/input_shaper.py and vendor-klipper/klippy/extras/input_shaper.py differ
+Only in vendor-klipper/klippy/extras: io_remap.py
+Only in stock-klipper/klippy/extras: led.py
+Only in vendor-klipper/klippy/extras: lis2dw.py
+Only in stock-klipper/klippy/extras: lm75.py
+Only in vendor-klipper/klippy/extras: load_ai.py
+Files stock-klipper/klippy/extras/manual_stepper.py and vendor-klipper/klippy/extras/manual_stepper.py differ
+Only in stock-klipper/klippy/extras: mcp4018.py
+Only in stock-klipper/klippy/extras: mcp4451.py
+Only in stock-klipper/klippy/extras: mcp4728.py
+Only in vendor-klipper/klippy/extras: metadata.py
+Only in vendor-klipper/klippy/extras: motor_control.py
+Only in vendor-klipper/klippy/extras: motor_control_wrapper.cpython-39.so
+Only in stock-klipper/klippy/extras: mpu9250.py
+Files stock-klipper/klippy/extras/multi_pin.py and vendor-klipper/klippy/extras/multi_pin.py differ
+Files stock-klipper/klippy/extras/output_pin.py and vendor-klipper/klippy/extras/output_pin.py differ
+Only in stock-klipper/klippy/extras: palette2.py
+Files stock-klipper/klippy/extras/pause_resume.py and vendor-klipper/klippy/extras/pause_resume.py differ
+Only in stock-klipper/klippy/extras: pca9533.py
+Only in stock-klipper/klippy/extras: pca9632.py
+Only in vendor-klipper/klippy/extras: photograph.py
+Files stock-klipper/klippy/extras/pid_calibrate.py and vendor-klipper/klippy/extras/pid_calibrate.py differ
+Files stock-klipper/klippy/extras/print_stats.py and vendor-klipper/klippy/extras/print_stats.py differ
+Files stock-klipper/klippy/extras/probe.py and vendor-klipper/klippy/extras/probe.py differ
+Only in vendor-klipper/klippy/extras: prtouch.py
+Only in vendor-klipper/klippy/extras: prtouch_v1_wrapper.cpython-39.so
+Only in vendor-klipper/klippy/extras: prtouch_v2.py
+Only in vendor-klipper/klippy/extras: prtouch_v2_wrapper.cpython-39.so
+Only in vendor-klipper/klippy/extras: prtouch_v3.py
+Only in vendor-klipper/klippy/extras: prtouch_v3_wrapper.cpython-39.so
+Files stock-klipper/klippy/extras/quad_gantry_level.py and vendor-klipper/klippy/extras/quad_gantry_level.py differ
+Files stock-klipper/klippy/extras/replicape.py and vendor-klipper/klippy/extras/replicape.py differ
+Files stock-klipper/klippy/extras/resonance_tester.py and vendor-klipper/klippy/extras/resonance_tester.py differ
+Files stock-klipper/klippy/extras/respond.py and vendor-klipper/klippy/extras/respond.py differ
+Only in stock-klipper/klippy/extras: safe_z_home.py
+Only in stock-klipper/klippy/extras: samd_sercom.py
+Files stock-klipper/klippy/extras/save_variables.py and vendor-klipper/klippy/extras/save_variables.py differ
+Only in stock-klipper/klippy/extras: screws_tilt_adjust.py
+Files stock-klipper/klippy/extras/sdcard_loop.py and vendor-klipper/klippy/extras/sdcard_loop.py differ
+Only in vendor-klipper/klippy/extras: serial_485.py
+Only in vendor-klipper/klippy/extras: serial_485_wrapper.cpython-39.so
+Only in stock-klipper/klippy/extras: servo.py
+Files stock-klipper/klippy/extras/shaper_calibrate.py and vendor-klipper/klippy/extras/shaper_calibrate.py differ
+Files stock-klipper/klippy/extras/skew_correction.py and vendor-klipper/klippy/extras/skew_correction.py differ
+Only in stock-klipper/klippy/extras: spi_temperature.py
+Only in vendor-klipper/klippy/extras: statistics_ext.py
+Only in stock-klipper/klippy/extras: statistics.py
+Files stock-klipper/klippy/extras/stepper_enable.py and vendor-klipper/klippy/extras/stepper_enable.py differ
+Only in stock-klipper/klippy/extras: sx1509.py
+Files stock-klipper/klippy/extras/temperature_fan.py and vendor-klipper/klippy/extras/temperature_fan.py differ
+Only in stock-klipper/klippy/extras: temperature_host.py
+Files stock-klipper/klippy/extras/temperature_mcu.py and vendor-klipper/klippy/extras/temperature_mcu.py differ
+Files stock-klipper/klippy/extras/temperature_sensors.cfg and vendor-klipper/klippy/extras/temperature_sensors.cfg differ
+Only in stock-klipper/klippy/extras: tmc2660.py
+Only in stock-klipper/klippy/extras: tmc5160.py
+Files stock-klipper/klippy/extras/tmc.py and vendor-klipper/klippy/extras/tmc.py differ
+Files stock-klipper/klippy/extras/tmc_uart.py and vendor-klipper/klippy/extras/tmc_uart.py differ
+Only in vendor-klipper/klippy/extras: tool.py
+Files stock-klipper/klippy/extras/verify_heater.py and vendor-klipper/klippy/extras/verify_heater.py differ
+Files stock-klipper/klippy/extras/virtual_sdcard.py and vendor-klipper/klippy/extras/virtual_sdcard.py differ
+Only in vendor-klipper/klippy/extras: z_align.py
+Files stock-klipper/klippy/extras/z_tilt.py and vendor-klipper/klippy/extras/z_tilt.py differ
+Files stock-klipper/klippy/gcode.py and vendor-klipper/klippy/gcode.py differ
+Files stock-klipper/klippy/kinematics/cartesian.py and vendor-klipper/klippy/kinematics/cartesian.py differ
+Files stock-klipper/klippy/kinematics/corexy.py and vendor-klipper/klippy/kinematics/corexy.py differ
+Files stock-klipper/klippy/kinematics/corexz.py and vendor-klipper/klippy/kinematics/corexz.py differ
+Files stock-klipper/klippy/kinematics/delta.py and vendor-klipper/klippy/kinematics/delta.py differ
+Files stock-klipper/klippy/kinematics/extruder.py and vendor-klipper/klippy/kinematics/extruder.py differ
+Files stock-klipper/klippy/kinematics/hybrid_corexy.py and vendor-klipper/klippy/kinematics/hybrid_corexy.py differ
+Files stock-klipper/klippy/kinematics/hybrid_corexz.py and vendor-klipper/klippy/kinematics/hybrid_corexz.py differ
+Files stock-klipper/klippy/kinematics/polar.py and vendor-klipper/klippy/kinematics/polar.py differ
+Files stock-klipper/klippy/klippy.py and vendor-klipper/klippy/klippy.py differ
+Files stock-klipper/klippy/mcu.py and vendor-klipper/klippy/mcu.py differ
+Files stock-klipper/klippy/msgproto.py and vendor-klipper/klippy/msgproto.py differ
+Only in vendor-klipper/klippy: mymodule
+Files stock-klipper/klippy/queuelogger.py and vendor-klipper/klippy/queuelogger.py differ
+Files stock-klipper/klippy/reactor.py and vendor-klipper/klippy/reactor.py differ
+Files stock-klipper/klippy/serialhdl.py and vendor-klipper/klippy/serialhdl.py differ
+Files stock-klipper/klippy/stepper.py and vendor-klipper/klippy/stepper.py differ
+Files stock-klipper/klippy/toolhead.py and vendor-klipper/klippy/toolhead.py differ
+Files stock-klipper/klippy/util.py and vendor-klipper/klippy/util.py differ
+Files stock-klipper/klippy/webhooks.py and vendor-klipper/klippy/webhooks.py differ
+Only in stock-klipper: lib
+Files stock-klipper/Makefile and vendor-klipper/Makefile differ
+Files stock-klipper/scripts/spi_flash/board_defs.py and vendor-klipper/scripts/spi_flash/board_defs.py differ
+Only in stock-klipper: src
+Only in vendor-klipper: tool
+Only in vendor-klipper: .vscode
