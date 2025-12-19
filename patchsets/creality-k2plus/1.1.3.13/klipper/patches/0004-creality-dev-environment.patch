@@ -1,0 +1,27 @@
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,3 +1,4 @@
++.history
+ out
+ *.so
+ *.pyc
+new file mode 100644
+--- /dev/null
++++ b/.gitmodules
+@@ -0,0 +1,3 @@
++[submodule "src/bootloader"]
++	path = src/bootloader
++	url = ssh://wuhui1@172.20.180.12:29419/kl_klipperboot
+new file mode 100644
+--- /dev/null
++++ b/.vscode/settings.json
+@@ -0,0 +1,8 @@
++{
++    "makefile.extensionOutputFolder": "./.vscode",
++    "files.associations": {
++        "gd32f30x_gpio.h": "c",
++        "gpio.h": "c"
++    },
++    "cmake.configureOnOpen": true
++}
+\ No newline at end of file

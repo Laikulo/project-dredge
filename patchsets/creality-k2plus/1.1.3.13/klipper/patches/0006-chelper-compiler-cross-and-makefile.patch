@@ -1,0 +1,123 @@
+--- /dev/null
++++ b/klippy/chelper/Makefile
+@@ -0,0 +1,33 @@
++CC = gcc
++CFLAGS := -Wall -g -O2 -flto -fwhole-program -fno-use-linker-plugin
++
++OBJECTS = pyhelper.o serialqueue.o stepcompress.o itersolve.o trapq.o \
++		  pollreactor.o msgblock.o trdispatch.o \
++		  kin_cartesian.o kin_corexy.o kin_corexz.o kin_delta.o \
++		  kin_deltesian.o kin_polar.o kin_rotary_delta.o kin_winch.o \
++		  kin_extruder.o kin_shaper.o
++
++ifeq ($(wildcard serial_485_queue.c), serial_485_queue.c)
++        OBJECTS += serial_485_queue.o
++endif
++ifeq ($(wildcard msgblock_485.c), msgblock_485.c)
++        OBJECTS += msgblock_485.o
++endif
++ifeq ($(wildcard filament_change.c), filament_change.c)
++        OBJECTS += filament_change.o
++endif
++
++DIST_LIB = c_helper.so
++
++all: $(DIST_LIB)
++
++clean:
++	@echo "Cleaning up directory."
++	rm -f *.a *.o  $(DIST_LIB) *~
++
++$(DIST_LIB):$(OBJECTS)
++	$(CC) -shared -fPIC -o $@ $(OBJECTS)
++
++%.o: %.c
++	$(CC) $(CFLAGS) -g -c -o $@ $<
++
+--- a/klippy/chelper/__init__.py
++++ b/klippy/chelper/__init__.py
+@@ -5,13 +5,38 @@
+ # This file may be distributed under the terms of the GNU GPLv3 license.
+ import os, logging
+ import cffi
+-
++import sys
+ 
+ ######################################################################
+ # c_helper.so compiling
+ ######################################################################
+ 
+ GCC_CMD = "gcc"
++
++# 如果命令行参数中提供了新值，则使用新值
++# 交叉编译使用示例 
++# python ./klippy/chelper/__init__.py GCC_CMD=/home/zhan/Downloads/ingenic_linux-develop/tools/toolchains/mips-gcc720-glibc229/bin/mips-linux-gnu-gcc 
++if len(sys.argv) > 1: 
++    if sys.argv[1].startswith("GCC_CMD="):
++        GCC_CMD = sys.argv[1].split("=", 1)[1]
++    else:
++        logging.info("Not using GCC_CMD from command line: %s", sys.argv[1])
++
++# 检查 gcc 编译器是否存在
++def check_gcc_exists():
++    compiler_exists = os.system("which gcc > /dev/null 2>&1") == 0
++    return compiler_exists
++
++# 判断是否应该执行编译
++should_compile = check_gcc_exists()
++
++if should_compile:
++    logging.info("GCC compiler found. Compiling the source code...")
++    print("GCC compiler found. Compiling the source code...")
++else:
++    logging.info("GCC compiler not found. Skipping compilation.")
++    print("GCC compiler not found. Skipping compilation.")
++
+ COMPILE_ARGS = ("-Wall -g -O2 -shared -fPIC"
+                 " -flto -fwhole-program -fno-use-linker-plugin"
+                 " -o %s %s")
+@@ -266,21 +291,29 @@ def get_ffi():
+         srcfiles = get_abs_files(srcdir, SOURCE_FILES)
+         ofiles = get_abs_files(srcdir, OTHER_FILES)
+         destlib = get_abs_files(srcdir, [DEST_LIB])[0]
+-        if check_build_code(srcfiles+ofiles+[__file__], destlib):
+-            if check_gcc_option(SSE_FLAGS):
+-                cmd = "%s %s %s" % (GCC_CMD, SSE_FLAGS, COMPILE_ARGS)
+-            else:
+-                cmd = "%s %s" % (GCC_CMD, COMPILE_ARGS)
+-            logging.info("Building C code module %s", DEST_LIB)
+-            do_build_code(cmd % (destlib, ' '.join(srcfiles)))
+-        FFI_main = cffi.FFI()
+-        for d in defs_all:
+-            FFI_main.cdef(d)
+-        FFI_lib = FFI_main.dlopen(destlib)
+-        # Setup error logging
+-        pyhelper_logging_callback = FFI_main.callback("void func(const char *)",
+-                                                      logging_callback)
+-        FFI_lib.set_python_logging_callback(pyhelper_logging_callback)
++        ## 没有检测到gcc的平台不执行此步骤
++        if should_compile:
++            ## 编译前先清除旧有的c_helper.so，防止后面加载出错
++            os.system("rm " + destlib)
++            if check_build_code(srcfiles+ofiles+[__file__], destlib):
++                if check_gcc_option(SSE_FLAGS):
++                    cmd = "%s %s %s" % (GCC_CMD, SSE_FLAGS, COMPILE_ARGS)
++                else:
++                    cmd = "%s %s" % (GCC_CMD, COMPILE_ARGS)
++                logging.info("Building C code module %s", DEST_LIB)
++                do_build_code(cmd % (destlib, ' '.join(srcfiles)))
++
++        ## 如果不是gcc，说明使用的交叉编译，不应执行此步骤，是gcc才执行该步骤，
++        ## 在不含gcc平台下，此步骤不受影响，因为GCC_CMD默认为gcc
++        if GCC_CMD == "gcc":
++            FFI_main = cffi.FFI()
++            for d in defs_all:
++                FFI_main.cdef(d)
++            FFI_lib = FFI_main.dlopen(destlib)
++            # Setup error logging
++            pyhelper_logging_callback = FFI_main.callback("void func(const char *)",
++                                                        logging_callback)
++            FFI_lib.set_python_logging_callback(pyhelper_logging_callback)
+     return FFI_main, FFI_lib
+ 
+ 

@@ -1,0 +1,1640 @@
+--- a/klippy/configfile.py
++++ b/klippy/configfile.py
+@@ -29,29 +29,36 @@ class ConfigWrapper:
+                     acc_id = (self.section.lower(), option.lower())
+                     self.access_tracking[acc_id] = default
+                 return default
+-            raise error("Option '%s' in section '%s' must be specified"
+-                        % (option, self.section))
++            raise error(
++                """{"code":"key335", "msg":"Option '%s' in section '%s' must be specified", "values":["%s", "%s"]}"""
++                % (option, self.section, option, self.section))
+         try:
+             v = parser(self.section, option)
+         except self.error as e:
+             raise
+         except:
+-            raise error("Unable to parse option '%s' in section '%s'"
+-                        % (option, self.section))
++            raise error(
++                """{"code": "key282", "msg": "Unable to parse option '%s' in section '%s'", "values":["%s", "%s"]}"""
++                % (option, self.section, option, self.section))
+         if note_valid:
+             self.access_tracking[(self.section.lower(), option.lower())] = v
+         if minval is not None and v < minval:
+-            raise error("Option '%s' in section '%s' must have minimum of %s"
+-                        % (option, self.section, minval))
++            if option == "z_offset" and self.section == "bltouch":
++                raise error("""{"code":"key281", "msg":"Error on 'z_offset': 'touch' must have minimum of %s", "values":["%s"]}""" % (
++                    minval, minval
++                ))
++            else:
++                raise error("""{"code":"key252", "msg":"Error on '%s': %s must have minimum of %s", "values":["%s","%s","%s"]}"""
++                            % (option, self.section, minval, option, self.section, minval))
+         if maxval is not None and v > maxval:
+-            raise error("Option '%s' in section '%s' must have maximum of %s"
+-                        % (option, self.section, maxval))
++            raise error("""{"code":"key253", "msg":"Error on '%s': %s must have maximumof %s", "values":["%s","%s","%s"]}"""
++                        % (option, self.section, maxval, option, self.section, maxval))
+         if above is not None and v <= above:
+-            raise error("Option '%s' in section '%s' must be above %s"
+-                        % (option, self.section, above))
++            raise error("""{"code":"key254", "msg":"Error on '%s': %s must be above %s", "values":["%s","%s","%s"]}"""
++                        % (option, self.section, above, option, self.section, above))
+         if below is not None and v >= below:
+-            raise self.error("Option '%s' in section '%s' must be below %s"
+-                             % (option, self.section, below))
++            raise self.error("""{"code":"key255", "msg":"Error on '%s': %s must be below %s", "values":["%s","%s","%s"]}"""
++                             % (option, self.section, below, option, self.section, below))
+         return v
+     def get(self, option, default=sentinel, note_valid=True):
+         return self._get_wrapper(self.fileconfig.get, option, default,
+@@ -292,13 +299,11 @@ class PrinterConfig:
+         for section_name in fileconfig.sections():
+             section = section_name.lower()
+             if section not in valid_sections and section not in objects:
+-                raise error("Section '%s' is not a valid config section"
+-                            % (section,))
++                raise error("""{"code":"key341", "msg":"Section '%s' is not a valid config section", "values":["%s"]}""" % (section, section))
+             for option in fileconfig.options(section_name):
+                 option = option.lower()
+                 if (section, option) not in access_tracking:
+-                    raise error("Option '%s' is not valid in section '%s'"
+-                                % (option, section))
++                    raise error("""{"code":"key342", "msg":"Option '%s' is not valid in section '%s'", "values":["%s", "%s"]}""" % (option, section, option, section))
+         # Setup get_status()
+         self._build_status(config)
+     def log_config(self, config):
+--- a/klippy/extras/adc_scaled.py
++++ b/klippy/extras/adc_scaled.py
+@@ -45,7 +45,7 @@ class PrinterADCScaled:
+         self.inv_smooth_time = 1. / smooth_time
+         self.mcu = self.mcu_vref.get_mcu()
+         if self.mcu is not self.mcu_vssa.get_mcu():
+-            raise config.error("vref and vssa must be on same mcu")
++            raise config.error("""{"code":"key188", "msg": "vref and vssa must be on same mcu", "values": []}""")
+         # Register setup_pin
+         ppins = self.printer.lookup_object('pins')
+         ppins.register_chip(self.name, self)
+@@ -61,7 +61,7 @@ class PrinterADCScaled:
+         return mcu_adc
+     def setup_pin(self, pin_type, pin_params):
+         if pin_type != 'adc':
+-            raise self.printer.config_error("adc_scaled only supports adc pins")
++            raise self.printer.config_error("""{"code":"key189", "msg": "adc_scaled only supports adc pins", "values": []}""")
+         return MCU_scaled_adc(self, pin_params)
+     def calc_smooth(self, read_time, read_value, last):
+         last_time, last_value = last
+--- a/klippy/extras/adc_temperature.py
++++ b/klippy/extras/adc_temperature.py
+@@ -54,7 +54,7 @@ class LinearInterpolate:
+                 last_value = value
+                 continue
+             if key <= last_key:
+-                raise ValueError("duplicate value")
++                raise ValueError("""{"code":"key26", "msg":"duplicate value", "values": []}""")
+             gain = (value - last_value) / (key - last_key)
+             offset = last_value - last_key * gain
+             if self.slopes and self.slopes[-1] == (gain, offset):
+@@ -64,7 +64,7 @@ class LinearInterpolate:
+             self.keys.append(key)
+             self.slopes.append((gain, offset))
+         if not self.keys:
+-            raise ValueError("need at least two samples")
++            raise ValueError("""{"code":"key27", "msg":"need at least two samples", "values": []}""")
+         self.keys.append(9999999999999.)
+         self.slopes.append(self.slopes[-1])
+     def interpolate(self, key):
+@@ -102,8 +102,8 @@ class LinearVoltage:
+         try:
+             li = LinearInterpolate(samples)
+         except ValueError as e:
+-            raise config.error("adc_temperature %s in heater %s" % (
+-                str(e), config.get_name()))
++            raise config.error("""{"code":"key28", "msg":"adc_temperature %s in heater %s", "values": ["%s", "%s"]}""" % (
++                str(e), config.get_name(), str(e), config.get_name()))
+         self.calc_temp = li.interpolate
+         self.calc_adc = li.reverse_interpolate
+ 
+@@ -134,8 +134,8 @@ class LinearResistance:
+         try:
+             self.li = LinearInterpolate([(r, t) for t, r in samples])
+         except ValueError as e:
+-            raise config.error("adc_temperature %s in heater %s" % (
+-                str(e), config.get_name()))
++            raise config.error("""{"code":"key28", "msg":"adc_temperature %s in heater %s", "values": ["%s", "%s"]}""" % (
++                str(e), config.get_name(), str(e), config.get_name()))
+     def calc_temp(self, adc):
+         # Calculate temperature from adc
+         adc = max(.00001, min(.99999, adc))
+--- a/klippy/extras/adxl345.py
++++ b/klippy/extras/adxl345.py
+@@ -139,7 +139,7 @@ class AccelCommandHelper:
+         # End measurements
+         name = gcmd.get("NAME", time.strftime("%Y%m%d_%H%M%S"))
+         if not name.replace('-', '').replace('_', '').isalnum():
+-            raise gcmd.error("Invalid NAME parameter")
++            raise gcmd.error("""{"code":"key64", "msg":"Invalid adxl345 NAME parameter", "values": []}""")
+         bg_client = self.bg_client
+         self.bg_client = None
+         bg_client.finish_measurements()
+@@ -158,7 +158,7 @@ class AccelCommandHelper:
+         aclient.finish_measurements()
+         values = aclient.get_samples()
+         if not values:
+-            raise gcmd.error("No accelerometer measurements found")
++            raise gcmd.error("""{"code":"key232", "msg":"No adxl345 measurements found", "values": []}""")
+         _, accel_x, accel_y, accel_z = values[-1]
+         gcmd.respond_info("accelerometer values (x, y, z): %.6f, %.6f, %.6f"
+                           % (accel_x, accel_y, accel_z))
+@@ -236,11 +236,11 @@ class ADXL345:
+               '-x': (0, -SCALE_XY), '-y': (1, -SCALE_XY), '-z': (2, -SCALE_Z)}
+         axes_map = config.getlist('axes_map', ('x','y','z'), count=3)
+         if any([a not in am for a in axes_map]):
+-            raise config.error("Invalid adxl345 axes_map parameter")
++            raise config.error('{"code": "key9", "msg": "Invalid adxl345 axes_map parameter"}')
+         self.axes_map = [am[a.strip()] for a in axes_map]
+         self.data_rate = config.getint('rate', 3200)
+         if self.data_rate not in QUERY_RATES:
+-            raise config.error("Invalid rate parameter: %d" % (self.data_rate,))
++            raise config.error("""{"code":"key245", "msg":"Invalid rate parameter: %d", "values": [%d]}""" % (self.data_rate,self.data_rate,))
+         # Measurement storage (accessed from background thread)
+         self.lock = threading.Lock()
+         self.raw_samples = []
+@@ -288,10 +288,8 @@ class ADXL345:
+         stored_val = self.read_reg(reg)
+         if stored_val != val:
+             raise self.printer.command_error(
+-                    "Failed to set ADXL345 register [0x%x] to 0x%x: got 0x%x. "
+-                    "This is generally indicative of connection problems "
+-                    "(e.g. faulty wiring) or a faulty adxl345 chip." % (
+-                        reg, val, stored_val))
++                    """{"code":"key65", "msg":"Failed to set ADXL345 register [0x%x] to 0x%x: got 0x%x. \nThis is generally indicative of connection problems\n(e.g. faulty wiring)\nor a faulty adxl345 chip.", "values": ["%x","%x","%x"]}""" % (
++                        reg, val, stored_val, reg, val, stored_val))
+     # Measurement collection
+     def is_measuring(self):
+         return self.query_rate > 0
+@@ -341,7 +339,7 @@ class ADXL345:
+             if fifo <= 32:
+                 break
+         else:
+-            raise self.printer.command_error("Unable to query adxl345 fifo")
++            raise self.printer.command_error("""{"code":"key118", "msg":"Unable to query adxl345 fifo", "values": []}""")
+         mcu_clock = self.mcu.clock32_to_clock64(params['clock'])
+         sequence = (self.last_sequence & ~0xffff) | params['next_sequence']
+         if sequence < self.last_sequence:
+@@ -374,10 +372,8 @@ class ADXL345:
+         dev_id = self.read_reg(REG_DEVID)
+         if dev_id != ADXL345_DEV_ID:
+             raise self.printer.command_error(
+-                "Invalid adxl345 id (got %x vs %x).\n"
+-                "This is generally indicative of connection problems\n"
+-                "(e.g. faulty wiring) or a faulty adxl345 chip."
+-                % (dev_id, ADXL345_DEV_ID))
++                """{"code":"key119", "msg": "Invalid adxl345 id (got %x vs %x).This is generally indicative of connection problems(e.g. faulty wiring) or a faulty adxl345 chip.", "values": ["%x", "%x"]}"""
++                % (dev_id, ADXL345_DEV_ID, dev_id, ADXL345_DEV_ID))
+         # Setup chip in requested query rate
+         self.set_reg(REG_POWER_CTL, 0x00)
+         self.set_reg(REG_DATA_FORMAT, 0x0B)
+--- a/klippy/extras/bed_mesh.py
++++ b/klippy/extras/bed_mesh.py
+@@ -316,7 +316,7 @@ class BedMeshCalibrate:
+         x_dist = math.floor(x_dist * 100) / 100
+         y_dist = math.floor(y_dist * 100) / 100
+         if x_dist < 1. or y_dist < 1.:
+-            raise error("bed_mesh: min/max points too close together")
++            raise error("""{"code":"key43", "msg":"bed_mesh: min/max points too close together", "values": []}""")
+ 
+         if self.radius is not None:
+             # round bed, min/max needs to be recalculated
+--- a/klippy/extras/bus.py
++++ b/klippy/extras/bus.py
+@@ -19,10 +19,10 @@ def resolve_bus_name(mcu, param, bus):
+     if bus is None:
+         rev_enums = {v: k for k, v in enums.items()}
+         if 0 not in rev_enums:
+-            raise ppins.error("Must specify %s on mcu '%s'" % (param, mcu_name))
++            raise ppins.error("""{"code": "key310", "msg": "Must specify %s on mcu '%s'", "values":["%s", "%s"]}""" % (param, mcu_name, param, mcu_name))
+         bus = rev_enums[0]
+     if bus not in enums:
+-        raise ppins.error("Unknown %s '%s'" % (param, bus))
++        raise ppins.error("""{"code": "key311", "msg": "Unknown %s '%s'", "values":["%s", "%s"]}""" % (param, bus, param, bus))
+     # Check for reserved bus pins
+     constants = mcu.get_constants()
+     reserve_pins = constants.get('BUS_PINS_%s' % (bus,), None)
+@@ -125,8 +125,8 @@ def MCU_SPI_from_config(config, mode, pin_option="cs_pin",
+                          for name in sw_pin_names]
+         for pin_params in sw_pin_params:
+             if pin_params['chip'] != mcu:
+-                raise ppins.error("%s: spi pins must be on same mcu" % (
+-                    config.get_name(),))
++                raise ppins.error("""{"code":"key231", "msg":"%s spi pins must be on same mcu", "values": ["%s"]}""" % (
++                    config.get_name(), config.get_name()))
+         sw_pins = tuple([pin_params['pin'] for pin_params in sw_pin_params])
+         bus = None
+     else:
+--- a/klippy/extras/controller_fan.py
++++ b/klippy/extras/controller_fan.py
+@@ -37,9 +37,8 @@ class ControllerFan:
+             return
+         if not all(x in all_steppers for x in self.stepper_names):
+             raise self.printer.config_error(
+-                "One or more of these steppers are unknown: "
+-                 "%s (valid steppers are: %s)"
+-                % (self.stepper_names, ", ".join(all_steppers)))
++                """{"code":"key66", "msg":"One or more of these steppers are unknown: %s (valid steppers are: %s)", "values": ["%s", "%s"]}"""
++                % (self.stepper_names, ", ".join(all_steppers), self.stepper_names, ", ".join(all_steppers)))
+     def handle_ready(self):
+         reactor = self.printer.get_reactor()
+         reactor.register_timer(self.callback, reactor.monotonic()+PIN_MIN_TIME)
+--- a/klippy/extras/endstop_phase.py
++++ b/klippy/extras/endstop_phase.py
+@@ -70,8 +70,9 @@ class EndstopPhase:
+         if trigger_phase is not None:
+             p, ps = config.getintlist('trigger_phase', sep='/', count=2)
+             if p >= ps:
+-                raise config.error("Invalid trigger_phase '%s'"
+-                                   % (trigger_phase,))
++                raise config.error(
++                                    """{"code":"key157", "msg": "Invalid trigger_phase '%s'", "values": ["%s"]}""" % (trigger_phase, trigger_phase)
++                                   )
+             self.endstop_phase = self.phase_calc.convert_phase(p, ps)
+         self.endstop_align_zero = config.getboolean('endstop_align_zero', False)
+         self.endstop_accuracy = config.getfloat('endstop_accuracy', None,
+@@ -86,8 +87,11 @@ class EndstopPhase:
+             self.endstop_phase_accuracy = int(
+                 math.ceil(self.endstop_accuracy / self.step_dist))
+         if self.endstop_phase_accuracy >= self.phases // 2:
+-            raise config.error("Endstop for %s is not accurate enough for"
+-                               " stepper phase adjustment" % (self.name,))
++            raise config.error(
++                               """{"code":"key158", "msg": "Endstop for %s is not accurate enough for stepper phase adjustment", "values": ["%s"]}""" % (
++                                   self.name, self.name
++                               )
++                               )
+         if self.printer.get_start_args().get('debugoutput') is not None:
+             self.endstop_phase_accuracy = self.phases
+     def align_endstop(self, rail):
+@@ -112,8 +116,10 @@ class EndstopPhase:
+             delta -= self.phases
+         elif delta > self.endstop_phase_accuracy:
+             raise self.printer.command_error(
+-                "Endstop %s incorrect phase (got %d vs %d)" % (
+-                    self.name, phase, self.endstop_phase))
++                """{"code":"key161", "msg": "Endstop %s incorrect phase (got %d vs %d)", "values": ["%s", %d, %d]}""" % (
++                    self.name, phase, self.endstop_phase, self.name, phase, self.endstop_phase
++                )
++            )
+         return delta * self.step_dist
+     def handle_home_rails_end(self, homing_state, rails):
+         for rail in rails:
+--- a/klippy/extras/force_move.py
++++ b/klippy/extras/force_move.py
+@@ -53,7 +53,7 @@ class ForceMove:
+         self.steppers[mcu_stepper.get_name()] = mcu_stepper
+     def lookup_stepper(self, name):
+         if name not in self.steppers:
+-            raise self.printer.config_error("Unknown stepper %s" % (name,))
++            raise self.printer.config_error("""{"code":"key31", "msg":"Unknown stepper %s", "values": ["%s"]}""" % (name, name))
+         return self.steppers[name]
+     def _force_enable(self, stepper):
+         toolhead = self.printer.lookup_object('toolhead')
+@@ -94,7 +94,7 @@ class ForceMove:
+     def _lookup_stepper(self, gcmd):
+         name = gcmd.get('STEPPER')
+         if name not in self.steppers:
+-            raise gcmd.error("Unknown stepper %s" % (name,))
++            raise gcmd.error("""{"code":"key31", "msg":"Unknown stepper %s", "values": ["%s"]}""" % (name, name))
+         return self.steppers[name]
+     cmd_STEPPER_BUZZ_help = "Oscillate a given stepper to help id it"
+     def cmd_STEPPER_BUZZ(self, gcmd):
+--- a/klippy/extras/gcode_macro.py
++++ b/klippy/extras/gcode_macro.py
+@@ -50,8 +50,11 @@ class TemplateWrapper:
+         try:
+             self.template = env.from_string(script)
+         except Exception as e:
+-            msg = "Error loading template '%s': %s" % (
+-                 name, traceback.format_exception_only(type(e), e)[-1])
++            # msg = "Error loading template '%s': %s" % (
++            #      name, traceback.format_exception_only(type(e), e)[-1])
++            msg = """{"code":"key164", "msg": "Error loading template '%s': %s", "values": ["%s", "%s"]}""" % (
++                name, traceback.format_exception_only(type(e), e)[-1], name, traceback.format_exception_only(type(e), e)[-1]
++            )
+             logging.exception(msg)
+             raise printer.config_error(msg)
+     def render(self, context=None):
+@@ -60,8 +63,12 @@ class TemplateWrapper:
+         try:
+             return str(self.template.render(context))
+         except Exception as e:
+-            msg = "Error evaluating '%s': %s" % (
+-                self.name, traceback.format_exception_only(type(e), e)[-1])
++            # msg = "Error evaluating '%s': %s" % (
++            #     self.name, traceback.format_exception_only(type(e), e)[-1])
++            msg = """{"code":"key165", "msg": "Error evaluating '%s': %s", "values": ["%s", "%s"]}""" % (
++                self.name, traceback.format_exception_only(type(e), e)[-1],
++                self.name, traceback.format_exception_only(type(e), e)[-1]
++            )
+             logging.exception(msg)
+             raise self.gcode.error(msg)
+     def run_gcode_from_command(self, context=None):
+@@ -80,7 +87,7 @@ class PrinterGCodeMacro:
+             script = config.get(option, default)
+         return TemplateWrapper(self.printer, self.env, name, script)
+     def _action_emergency_stop(self, msg="action_emergency_stop"):
+-        self.printer.invoke_shutdown("Shutdown due to %s" % (msg,))
++        self.printer.invoke_shutdown("""{"code":"key170", "msg": "Shutdown due to %s", "values": ["%s"]}""" % (msg, msg))
+         return ""
+     def _action_respond_info(self, msg):
+         self.printer.lookup_object('gcode').respond_info(msg)
+@@ -115,8 +122,12 @@ class GCodeMacro:
+     def __init__(self, config):
+         if len(config.get_name().split()) > 2:
+             raise config.error(
+-                    "Name of section '%s' contains illegal whitespace"
+-                    % (config.get_name()))
++                    # "Name of section '%s' contains illegal whitespace"
++                    # % (config.get_name())
++                    """{"code":"key166", "msg": "Name of section '%s' contains illegal whitespace", "values": ["%s"]}""" % (
++                        config.get_name(), config.get_name(),
++                    )
++            )
+         name = config.get_name().split()[1]
+         self.alias = name.upper()
+         self.printer = printer = config.get_printer()
+@@ -129,8 +140,9 @@ class GCodeMacro:
+             if (self.gcode.is_traditional_gcode(self.alias)
+                 != self.gcode.is_traditional_gcode(self.rename_existing)):
+                 raise config.error(
+-                    "G-Code macro rename of different types ('%s' vs '%s')"
+-                    % (self.alias, self.rename_existing))
++                    # "G-Code macro rename of different types ('%s' vs '%s')"
++                    """{"code":"key167", "msg": "G-Code macro rename of different types ('%s' vs '%s')", "values": ["%s", "%s"]}"""
++                    % (self.alias, self.rename_existing, self.alias, self.rename_existing))
+             printer.register_event_handler("klippy:connect",
+                                            self.handle_connect)
+         else:
+@@ -154,8 +166,10 @@ class GCodeMacro:
+         prev_cmd = self.gcode.register_command(self.alias, None)
+         if prev_cmd is None:
+             raise self.printer.config_error(
+-                "Existing command '%s' not found in gcode_macro rename"
+-                % (self.alias,))
++                """{"code":"key169", "msg": "Existing command '%s' not found in gcode_macro rename", "values": ["%s"]}""" % (
++                    self.alias, self.alias
++                )
++            )
+         pdesc = "Renamed builtin of '%s'" % (self.alias,)
+         self.gcode.register_command(self.rename_existing, prev_cmd, desc=pdesc)
+         self.gcode.register_command(self.alias, self.cmd, desc=self.cmd_desc)
+@@ -176,7 +190,8 @@ class GCodeMacro:
+         self.variables = v
+     def cmd(self, gcmd):
+         if self.in_script:
+-            raise gcmd.error("Macro %s called recursively" % (self.alias,))
++            # raise gcmd.error("Macro %s called recursively" % (self.alias,))
++            raise gcmd.error("""{"code":"key172", "msg": "Macro %s called recursively", "values": ["%s"]}""" % (self.alias, self.alias))
+         kwparams = dict(self.variables)
+         kwparams.update(self.template.create_template_context())
+         kwparams['params'] = gcmd.get_command_parameters()
+--- a/klippy/extras/gcode_move.py
++++ b/klippy/extras/gcode_move.py
+@@ -134,12 +134,12 @@ class GCodeMove:
+             if 'F' in params:
+                 gcode_speed = float(params['F'])
+                 if gcode_speed <= 0.:
+-                    raise gcmd.error("Invalid speed in '%s'"
+-                                     % (gcmd.get_commandline(),))
++                    raise gcmd.error("""{"code":"key272": "msg":"Invalid speed in '%s'", "values":["%s"]}"""
++                                     % (gcmd.get_commandline(),gcmd.get_commandline()))
+                 self.speed = gcode_speed * self.speed_factor
+         except ValueError as e:
+-            raise gcmd.error("Unable to parse move '%s'"
+-                             % (gcmd.get_commandline(),))
++            raise gcmd.error("""{"code":"key273": "msg":"Unable to parse move '%s'", "values":["%s"]}"""
++                             % (gcmd.get_commandline(),gcmd.get_commandline()))
+         self.move_with_transform(self.last_position, self.speed)
+     # G-Code coordinate manipulation
+     def cmd_G20(self, gcmd):
+@@ -223,7 +223,7 @@ class GCodeMove:
+         state_name = gcmd.get('NAME', 'default')
+         state = self.saved_states.get(state_name)
+         if state is None:
+-            raise gcmd.error("Unknown g-code state: %s" % (state_name,))
++            raise gcmd.error("""{"code":"key274", "msg": "Unknown g-code state: %s", "values":["%s"]}""" % (state_name, state_name))
+         # Restore state
+         self.absolute_coord = state['absolute_coord']
+         self.absolute_extrude = state['absolute_extrude']
+@@ -245,7 +245,7 @@ class GCodeMove:
+     def cmd_GET_POSITION(self, gcmd):
+         toolhead = self.printer.lookup_object('toolhead', None)
+         if toolhead is None:
+-            raise gcmd.error("Printer not ready")
++            raise gcmd.error("""{"code": "key283", "msg": ""Printer not ready"}""")
+         kin = toolhead.get_kinematics()
+         steppers = kin.get_steppers()
+         mcu_pos = " ".join(["%s:%d" % (s.get_name(), s.get_mcu_position())
+--- a/klippy/extras/heaters.py
++++ b/klippy/extras/heaters.py
+@@ -96,8 +96,8 @@ class Heater:
+     def set_temp(self, degrees):
+         if degrees and (degrees < self.min_temp or degrees > self.max_temp):
+             raise self.printer.command_error(
+-                "Requested temperature (%.1f) out of range (%.1f:%.1f)"
+-                % (degrees, self.min_temp, self.max_temp))
++                """{"code":"key340", "msg":"Heaters %s Requested temperature (%.1f) out of range (%.1f:%.1f)", "values":["%s", %.1f, %.1f, %.1f]}"""
++                % (self.name, degrees, self.min_temp, self.max_temp, self.name, degrees, self.min_temp, self.max_temp))
+         with self.lock:
+             self.target_temp = degrees
+     def get_temp(self, eventtime):
+--- a/klippy/extras/homing.py
++++ b/klippy/extras/homing.py
+@@ -93,7 +93,7 @@ class HomingMove:
+         try:
+             self.toolhead.drip_move(movepos, speed, all_endstop_trigger)
+         except self.printer.command_error as e:
+-            error = "Error during homing move: %s" % (str(e),)
++            error = """{"code":"key20", "msg":"Error during homing move: %s", "values": [%s]}""" % (str(e),str(e))
+         # Wait for endstops to trigger
+         trigger_times = {}
+         move_end_print_time = self.toolhead.get_last_move_time()
+@@ -102,9 +102,9 @@ class HomingMove:
+             if trigger_time > 0.:
+                 trigger_times[name] = trigger_time
+             elif trigger_time < 0. and error is None:
+-                error = "Communication timeout during homing %s" % (name,)
++                error = """{"code":"key21", "msg":"Communication timeout during homing %s", "values": ["%s"]}""" % (name, name)
+             elif check_triggered and error is None:
+-                error = "No trigger on %s after full movement" % (name,)
++                error = """{"code":"key22", "msg":"No trigger on %s after full movement", "values": ["%s"]}""" % (name, name)
+         # Determine stepper halt positions
+         self.toolhead.flush_step_generation()
+         for sp in self.stepper_positions:
+@@ -202,8 +202,8 @@ class Homing:
+             hmove.homing_move(homepos, hi.second_homing_speed)
+             if hmove.check_no_movement() is not None:
+                 raise self.printer.command_error(
+-                    "Endstop %s still triggered after retract"
+-                    % (hmove.check_no_movement(),))
++                    """{"code":"key23", "msg":"Endstop %s still triggered after retract", "values": ["%s"]}"""
++                    % (hmove.check_no_movement(), hmove.check_no_movement()))
+         # Signal home operation complete
+         self.toolhead.flush_step_generation()
+         self.trigger_mcu_pos = {sp.stepper_name: sp.trig_pos
+@@ -237,9 +237,10 @@ class PrinterHoming:
+         except self.printer.command_error:
+             if self.printer.is_shutdown():
+                 raise self.printer.command_error(
+-                    "Homing failed due to printer shutdown")
++                    '{"code": "key4", "msg": "Homing failed due to printer shutdown"}')
+             raise
+     def probing_move(self, mcu_probe, pos, speed):
++
+         endstops = [(mcu_probe, "probe")]
+         hmove = HomingMove(self.printer, endstops)
+         try:
+@@ -247,11 +248,12 @@ class PrinterHoming:
+         except self.printer.command_error:
+             if self.printer.is_shutdown():
+                 raise self.printer.command_error(
+-                    "Probing failed due to printer shutdown")
++                    '{"code": "key5", "msg": "Probing failed due to printer shutdown"}')
+             raise
+-        if hmove.check_no_movement() is not None:
+-            raise self.printer.command_error(
+-                "Probe triggered prior to movement")
++        # 暂时关闭该检查，跳过误触发导致报错问题，调平代码有异常点重探机制
++        # if hmove.check_no_movement() is not None:
++        #     raise self.printer.command_error(
++        #         '{"code": "key6", "msg": "Probe triggered prior to movement"}')
+         return epos
+     def cmd_G28(self, gcmd):
+         # Move to origin
+--- a/klippy/extras/homing_heaters.py
++++ b/klippy/extras/homing_heaters.py
+@@ -28,8 +28,8 @@ class HomingHeaters:
+         else:
+             if not all(x in all_heaters for x in self.disable_heaters):
+                 raise self.printer.config_error(
+-                    "One or more of these heaters are unknown: %s"
+-                    % (self.disable_heaters,))
++                    """{"code":"key68", "msg": "One or more of these heaters are unknown: %s", "values": ["%s"]}"""
++                    % (self.disable_heaters,self.disable_heaters,))
+         # steppers valid?
+         kin = self.printer.lookup_object('toolhead').get_kinematics()
+         all_steppers = [s.get_name() for s in kin.get_steppers()]
+@@ -37,8 +37,8 @@ class HomingHeaters:
+             return
+         if not all(x in all_steppers for x in self.flaky_steppers):
+             raise self.printer.config_error(
+-                "One or more of these steppers are unknown: %s"
+-                % (self.flaky_steppers,))
++                """{"code":"key67", "msg":"One or more of these steppers are unknown: %s", "values": ["%s"]}"""
++                % (self.flaky_steppers, self.flaky_steppers,))
+     def check_eligible(self, endstops):
+         if self.flaky_steppers is None:
+             return True
+--- a/klippy/extras/input_shaper.py
++++ b/klippy/extras/input_shaper.py
+@@ -16,7 +16,8 @@ class InputShaperParams:
+         self.shaper_type = config.get('shaper_type_' + axis, shaper_type)
+         if self.shaper_type not in self.shapers:
+             raise config.error(
+-                    'Unsupported shaper type: %s' % (self.shaper_type,))
++                    """{"code":"key24", "msg":"Unsupported shaper type: %s", "values": ["%s"]}""" % (
++                        self.shaper_type, self.shaper_type))
+         self.damping_ratio = config.getfloat('damping_ratio_' + axis,
+                                              shaper_defs.DEFAULT_DAMPING_RATIO,
+                                              minval=0., maxval=1.)
+@@ -32,7 +33,8 @@ class InputShaperParams:
+         if shaper_type is None:
+             shaper_type = gcmd.get('SHAPER_TYPE_' + axis, self.shaper_type)
+         if shaper_type.lower() not in self.shapers:
+-            raise gcmd.error('Unsupported shaper type: %s' % (shaper_type,))
++            raise gcmd.error("""{"code":"key24", "msg":"Unsupported shaper type: %s", "values": ["%s"]}""" % (
++                shaper_type, shaper_type))
+         self.shaper_type = shaper_type.lower()
+     def get_shaper(self):
+         if not self.shaper_freq:
+@@ -139,8 +141,8 @@ class InputShaper:
+                     failed.append(shaper)
+         if failed:
+             error = error or self.printer.command_error
+-            raise error("Failed to configure shaper(s) %s with given parameters"
+-                        % (', '.join([s.get_name() for s in failed])))
++            raise error("""{"code":"key25", "msg":"Failed to configure shaper(s) %s with given parameters", "values": ["%s"]}"""
++                        % (', '.join([s.get_name() for s in failed]), ', '.join([s.get_name() for s in failed])))
+     def disable_shaping(self):
+         for shaper in self.shapers:
+             shaper.disable_shaping()
+--- a/klippy/extras/manual_stepper.py
++++ b/klippy/extras/manual_stepper.py
+@@ -75,7 +75,7 @@ class ManualStepper:
+     def do_homing_move(self, movepos, speed, accel, triggered, check_trigger):
+         if not self.can_home:
+             raise self.printer.command_error(
+-                "No endstop for this manual stepper")
++                """{"code":"key198", "msg": "No endstop for this manual stepper", "values": []}""")
+         self.homing_accel = accel
+         pos = [movepos, 0., 0., 0.]
+         endstops = self.rail.get_endstops()
+--- a/klippy/extras/multi_pin.py
++++ b/klippy/extras/multi_pin.py
+@@ -21,7 +21,7 @@ class PrinterMultiPin:
+         pin = self.printer.lookup_object('multi_pin ' + pin_name, None)
+         if pin is not self:
+             if pin is None:
+-                raise ppins.error("multi_pin %s not configured" % (pin_name,))
++                raise ppins.error("""{"code":"key40", "msg":"multi_pin %s not configured", "values": ["%s"]}""" % (pin_name, pin_name))
+             return pin.setup_pin(pin_type, pin_params)
+         if self.pin_type is not None:
+             raise ppins.error("Can't setup multi_pin %s twice" % (pin_name,))
+--- a/klippy/extras/pause_resume.py
++++ b/klippy/extras/pause_resume.py
+@@ -60,7 +60,7 @@ class PauseResume:
+     cmd_PAUSE_help = ("Pauses the current print")
+     def cmd_PAUSE(self, gcmd):
+         if self.is_paused:
+-            gcmd.respond_info("Print already paused")
++            gcmd.respond_info("""{"code":"key211", "msg": "Print already paused", "values": []}""")
+             return
+         self.send_pause_command()
+         self.gcode.run_script_from_command("SAVE_GCODE_STATE NAME=PAUSE_STATE")
+@@ -76,7 +76,7 @@ class PauseResume:
+     cmd_RESUME_help = ("Resumes the print from a pause")
+     def cmd_RESUME(self, gcmd):
+         if not self.is_paused:
+-            gcmd.respond_info("Print is not paused, resume aborted")
++            gcmd.respond_info("""{"code": "key16", "msg": "Print is not paused, resume aborted"}""")
+             return
+         velocity = gcmd.get_float('VELOCITY', self.recover_velocity)
+         self.gcode.run_script_from_command(
+--- a/klippy/extras/pid_calibrate.py
++++ b/klippy/extras/pid_calibrate.py
+@@ -34,7 +34,7 @@ class PIDCalibrate:
+         if write_file:
+             calibrate.write_file('/tmp/heattest.txt')
+         if calibrate.check_busy(0., 0., 0.):
+-            raise gcmd.error("pid_calibrate interrupted")
++            raise gcmd.error('{"code": "key7", "msg": "pid_calibrate interrupted"}')
+         # Log and report results
+         Kp, Ki, Kd = calibrate.calc_final_pid()
+         logging.info("Autotune: final: Kp=%f Ki=%f Kd=%f", Kp, Ki, Kd)
+--- a/klippy/extras/probe.py
++++ b/klippy/extras/probe.py
+@@ -116,7 +116,7 @@ class PrinterProbe:
+         toolhead = self.printer.lookup_object('toolhead')
+         curtime = self.printer.get_reactor().monotonic()
+         if 'z' not in toolhead.get_status(curtime)['homed_axes']:
+-            raise self.printer.command_error("Must home before probe")
++            raise self.printer.command_error("""{"code":"key96", "msg": "Must home before probe", "values": []}""")
+         phoming = self.printer.lookup_object('homing')
+         pos = toolhead.get_position()
+         pos[2] = self.z_position
+@@ -372,7 +372,7 @@ class ProbePointsHelper:
+     def minimum_points(self,n):
+         if len(self.probe_points) < n:
+             raise self.printer.config_error(
+-                "Need at least %d probe points for %s" % (n, self.name))
++                """{"code":"key98", "msg": "Need at least %d probe points for %s", "values": [%d, "%s"]}""" % (n, self.name, n, self.name))
+     def update_probe_points(self, points, min_points):
+         self.probe_points = points
+         self.minimum_points(min_points)
+@@ -418,8 +418,7 @@ class ProbePointsHelper:
+         self.lift_speed = probe.get_lift_speed(gcmd)
+         self.probe_offsets = probe.get_offsets()
+         if self.horizontal_move_z < self.probe_offsets[2]:
+-            raise gcmd.error("horizontal_move_z can't be less than"
+-                             " probe's z_offset")
++            raise gcmd.error("""{"code": "key15", "msg": "horizontal_move_z can't be less than probe's z_offset"}""")
+         probe.multi_probe_begin()
+         while 1:
+             done = self._move_next()
+--- a/klippy/extras/quad_gantry_level.py
++++ b/klippy/extras/quad_gantry_level.py
+@@ -32,14 +32,14 @@ class QuadGantryLevel:
+         self.probe_helper = probe.ProbePointsHelper(config, self.probe_finalize)
+         if len(self.probe_helper.probe_points) != 4:
+             raise config.error(
+-                "Need exactly 4 probe points for quad_gantry_level")
++                """{"code":"key213", "msg": "Need exactly 4 probe points for quad_gantry_level" "values": []}""")
+         self.z_status = z_tilt.ZAdjustStatus(self.printer)
+         self.z_helper = z_tilt.ZAdjustHelper(config, 4)
+         self.gantry_corners = config.getlists('gantry_corners', parser=float,
+                                               seps=(',', '\n'), count=2)
+         if len(self.gantry_corners) < 2:
+             raise config.error(
+-                "quad_gantry_level requires at least two gantry_corners")
++                """{"code":"key214", "msg": "quad_gantry_level requires at least two gantry_corners" "values": []}""")
+         # Register QUAD_GANTRY_LEVEL command
+         self.gcode = self.printer.lookup_object('gcode')
+         self.gcode.register_command(
+@@ -102,10 +102,8 @@ class QuadGantryLevel:
+ 
+         adjust_max = max(z_adjust)
+         if adjust_max > self.max_adjust:
+-            raise self.gcode.error("Aborting quad_gantry_level"
+-                                   " required adjustment %0.6f"
+-                                   " is greater than max_adjust %0.6f"
+-                                   % (adjust_max, self.max_adjust))
++            raise self.gcode.error("""{"code":"key215", "msg": "Aborting quad_gantry_level required adjustment %0.6f is greater than max_adjust %0.6f" "values": [%0.6f,%0.6f]}"""
++                                   % (adjust_max, self.max_adjust, adjust_max, self.max_adjust))
+ 
+         speed = self.probe_helper.get_lift_speed()
+         self.z_helper.adjust_steppers(z_adjust, speed)
+--- a/klippy/extras/replicape.py
++++ b/klippy/extras/replicape.py
+@@ -18,7 +18,7 @@ class pca9685_pwm:
+         self._replicape = replicape
+         self._channel = channel
+         if pin_type not in ['digital_out', 'pwm']:
+-            raise pins.error("Pin type not supported on replicape")
++            raise pins.error("""{"code":"key276": "msg":"Pin type not supported on replicape", "values":[]}""")
+         self._mcu = replicape.host_mcu
+         self._mcu.register_config_callback(self._build_config)
+         self._bus = REPLICAPE_PCA9685_BUS
+@@ -38,13 +38,13 @@ class pca9685_pwm:
+         self._max_duration = max_duration
+     def setup_cycle_time(self, cycle_time, hardware_pwm=False):
+         if hardware_pwm:
+-            raise pins.error("pca9685 does not support hardware_pwm parameter")
++            raise pins.error("""{"code":"key216", "msg": "pca9685 does not support hardware_pwm parameter" "values": []}""")
+         if cycle_time != self._cycle_time:
+             logging.info("Ignoring pca9685 cycle time of %.6f (using %.6f)",
+                          cycle_time, self._cycle_time)
+     def setup_start_value(self, start_value, shutdown_value, is_static=False):
+         if is_static and start_value != shutdown_value:
+-            raise pins.error("Static pin can not have shutdown value")
++            raise pins.error("""{"code":"key277": "msg":"Static pin can not have shutdown value", "values":[]}""")
+         if self._invert:
+             start_value = 1. - start_value
+             shutdown_value = 1. - shutdown_value
+@@ -93,9 +93,9 @@ class pca9685_pwm:
+ class ReplicapeDACEnable:
+     def __init__(self, replicape, channel, pin_type, pin_params):
+         if pin_type != 'digital_out':
+-            raise pins.error("Replicape virtual enable pin must be digital_out")
++            raise pins.error("""{"code":"key277": "msg":"Static pin can not have shutdown value", "values":[]}""")
+         if pin_params['invert']:
+-            raise pins.error("Replicape virtual enable pin can not be inverted")
++            raise pins.error("""{"code":"key278": "msg":"Replicape virtual enable pin can not be invertede", "values":[]}""")
+         self.mcu = replicape.host_mcu
+         self.value = replicape.stepper_dacs[channel]
+         self.pwm = pca9685_pwm(replicape, channel, pin_type, pin_params)
+@@ -130,7 +130,7 @@ class servo_pwm:
+                 '/sys/devices/platform/ocp/48302000.epwmss/48302200.pwm/pwm/')
+                 pwmchip = [pc for pc in pwmdev if pc.startswith('pwmchip')][0]
+             except:
+-                raise pins.error("Replicape unable to determine pwmchip")
++                raise pins.error("""{"code":"key279": "msg":"Replicape unable to determine pwmchip", "values":[]}""")
+         pwm_pin, resv1, resv2 = SERVO_PINS[config_name]
+         pin_params = dict(pin_params)
+         pin_params['pin'] = pwmchip + pwm_pin
+--- a/klippy/extras/resonance_tester.py
++++ b/klippy/extras/resonance_tester.py
+@@ -36,13 +36,13 @@ def _parse_axis(gcmd, raw_axis):
+         return TestAxis(axis=raw_axis)
+     dirs = raw_axis.split(',')
+     if len(dirs) != 2:
+-        raise gcmd.error("Invalid format of axis '%s'" % (raw_axis,))
++        raise gcmd.error("""{"code": "key304", "msg": "Invalid format of axiss '%s'", "values":["%s"]}""" % (raw_axis,raw_axis))
+     try:
+         dir_x = float(dirs[0].strip())
+         dir_y = float(dirs[1].strip())
+     except:
+         raise gcmd.error(
+-                "Unable to parse axis direction '%s'" % (raw_axis,))
++                """{"code": "key305", "msg": "Unable to parse axis direction '%s'", "values":["%s"]}""" % (raw_axis, raw_axis))
+     return TestAxis(vib_dir=(dir_x, dir_y))
+ 
+ class VibrationPulseTest:
+@@ -199,9 +199,8 @@ class ResonanceTester:
+                 for chip_axis, aclient, chip_name in raw_values:
+                     if not aclient.has_valid_samples():
+                         raise gcmd.error(
+-                            "accelerometer '%s' measured no data" % (
+-                                chip_name,))
+-                    new_data = helper.process_accelerometer_data(aclient)
++						        """{"code":"key56", "msg":"accelerometer '%s' measured no data", "values": ["%s"]}""" % (
++                                    chip_name, chip_name))
+                     if calibration_data[axis] is None:
+                         calibration_data[axis] = new_data
+                     else:
+@@ -237,14 +236,12 @@ class ResonanceTester:
+         outputs = gcmd.get("OUTPUT", "resonances").lower().split(',')
+         for output in outputs:
+             if output not in ['resonances', 'raw_data']:
+-                raise gcmd.error("Unsupported output '%s', only 'resonances'"
+-                                 " and 'raw_data' are supported" % (output,))
++                raise gcmd.error("""{"code": "key306", "msg": "Unsupported output '%s', only 'resonances' and 'raw_data' are supported", "values":["%s"]}""" % (output, output))
+         if not outputs:
+-            raise gcmd.error("No output specified, at least one of 'resonances'"
+-                             " or 'raw_data' must be set in OUTPUT parameter")
++            raise gcmd.error("""{"code": "key307", "msg": "No output specified, at least one of 'resonances' or 'raw_data' must be set in OUTPUT parameter", "values":[]}""")
+         name_suffix = gcmd.get("NAME", time.strftime("%Y%m%d_%H%M%S"))
+         if not self.is_valid_name_suffix(name_suffix):
+-            raise gcmd.error("Invalid NAME parameter")
++            raise gcmd.error("""{"code":"key55", "msg":"Invalid NAME parameter", "values": []}""")
+         csv_output = 'resonances' in outputs
+         raw_output = 'raw_data' in outputs
+ 
+--- a/klippy/extras/respond.py
++++ b/klippy/extras/respond.py
+@@ -42,8 +42,8 @@ class HostResponder:
+                 no_space = True
+             else:
+                 raise gcmd.error(
+-                    "RESPOND TYPE '%s' is invalid. Must be one"
+-                    " of 'echo', 'command', or 'error'" % (respond_type,))
++                    """{"code": "key309", "msg": "RESPOND TYPE '%s' is invalid. Must be one of 'echo', 'command', or 'error'", "values":["%s"]}""" % (
++                        respond_type, respond_type))
+         prefix = gcmd.get('PREFIX', prefix)
+         msg = gcmd.get('MSG', '')
+         if(no_space):
+--- a/klippy/extras/save_variables.py
++++ b/klippy/extras/save_variables.py
+@@ -29,7 +29,7 @@ class SaveVariables:
+                 for name, val in varfile.items('Variables'):
+                     allvars[name] = ast.literal_eval(val)
+         except:
+-            msg = "Unable to parse existing variable file"
++            msg = """{"code": "key284", "msg": ""Unable to parse existing variable file", "values": []}"""
+             logging.exception(msg)
+             raise self.printer.command_error(msg)
+         self.allVariables = allvars
+@@ -40,7 +40,7 @@ class SaveVariables:
+         try:
+             value = ast.literal_eval(value)
+         except ValueError as e:
+-            raise gcmd.error("Unable to parse '%s' as a literal" % (value,))
++            raise gcmd.error("""{"code": "key285", "msg": "Unable to parse '%s' as a literal", "values": ["%s"]}""" % (value, value))
+         newvars = dict(self.allVariables)
+         newvars[varname] = value
+         # Write file
+@@ -53,7 +53,7 @@ class SaveVariables:
+             varfile.write(f)
+             f.close()
+         except:
+-            msg = "Unable to save variable"
++            msg = """{"code": "key286", "msg": "Unable to save variable", "values": []}"""
+             logging.exception(msg)
+             raise gcmd.error(msg)
+         self.loadVariables()
+--- a/klippy/extras/sdcard_loop.py
++++ b/klippy/extras/sdcard_loop.py
+@@ -25,15 +25,15 @@ class SDCardLoop:
+     def cmd_SDCARD_LOOP_BEGIN(self, gcmd):
+         count = gcmd.get_int("COUNT", minval=0)
+         if not self.loop_begin(count):
+-            raise gcmd.error("Only permitted in SD file.")
++            raise gcmd.error("""{"code":"key176", "msg": "Only permitted in SD file.", "values": []}""")
+     cmd_SDCARD_LOOP_END_help = "Ends a looped section in the SD file."
+     def cmd_SDCARD_LOOP_END(self, gcmd):
+         if not self.loop_end():
+-            raise gcmd.error("Only permitted in SD file.")
++            raise gcmd.error("""{"code":"key176", "msg": "Only permitted in SD file.", "values": []}""")
+     cmd_SDCARD_LOOP_DESIST_help = "Stops iterating the current loop stack."
+     def cmd_SDCARD_LOOP_DESIST(self, gcmd):
+         if not self.loop_desist():
+-            raise gcmd.error("Only permitted outside of a SD file.")
++            raise gcmd.error("""{"code":"key177", "msg": "Only permitted outside of a SD file..", "values": []}""")
+     def loop_begin(self, count):
+         if not self.sdcard.is_cmd_from_sd():
+             # Can only run inside of an SD file
+--- a/klippy/extras/shaper_calibrate.py
++++ b/klippy/extras/shaper_calibrate.py
+@@ -100,7 +100,7 @@ class ShaperCalibrate:
+         # Return results
+         is_err, res = parent_conn.recv()
+         if is_err:
+-            raise self.error("Error in remote calculation: %s" % (res,))
++            raise self.error("""{"code": "key312", "msg": "Error in remote calculation: %s", "values":["%s"]}""" % (res,res))
+         calc_proc.join()
+         parent_conn.close()
+         return res
+@@ -177,7 +177,7 @@ class ShaperCalibrate:
+                 self.calc_freq_response, (data,))
+         if calibration_data is None:
+             raise self.error(
+-                    "Internal error processing accelerometer data %s" % (data,))
++                    """{"code": "key313", "msg": "Internal error processing accelerometer data %s", "values":["%s"]}""" % (data,data))
+         calibration_data.set_numpy(self.numpy)
+         return calibration_data
+ 
+@@ -357,4 +357,4 @@ class ShaperCalibrate:
+                             csvfile.write(",%.3f" % (shaper.vals[i],))
+                     csvfile.write("\n")
+         except IOError as e:
+-            raise self.error("Error writing to file '%s': %s", output, str(e))
++            raise self.error({"code": "key314", "msg": "Error writing to file '%s': %s", "values":["%s", "%s"]}, output, str(e), output, str(e))
+--- a/klippy/extras/skew_correction.py
++++ b/klippy/extras/skew_correction.py
+@@ -109,8 +109,8 @@ class PrinterSkew:
+                         raise Exception
+                 except Exception:
+                     raise gcmd.error(
+-                        "skew_correction: improperly formatted entry for "
+-                        "plane [%s]\n%s" % (plane, gcmd.get_commandline()))
++                        """{"code": "key315", "msg": "skew_correction: improperly formatted entry for plane [%s]\n%s", "values":["%s", "%s"]}""" % (
++                            plane, gcmd.get_commandline(), plane, gcmd.get_commandline()))
+                 factor = plane.lower() + '_factor'
+                 setattr(self, factor, calc_skew_factor(*lengths))
+     cmd_SKEW_PROFILE_help = "Profile management for skew_correction"
+--- a/klippy/extras/temperature_fan.py
++++ b/klippy/extras/temperature_fan.py
+@@ -92,8 +92,8 @@ class TemperatureFan:
+     def set_temp(self, degrees):
+         if degrees and (degrees < self.min_temp or degrees > self.max_temp):
+             raise self.printer.command_error(
+-                "Requested temperature (%.1f) out of range (%.1f:%.1f)"
+-                % (degrees, self.min_temp, self.max_temp))
++                """{"code":"key339", "msg":"TemperatureFan %s Requested temperature (%.1f) out of range (%.1f:%.1f)", "values":["%s", %.1f, %.1f, %.1f]}"""
++                % (self.name, degrees, self.min_temp, self.max_temp, self.name, degrees, self.min_temp, self.max_temp))
+         self.target_temp = degrees
+ 
+     def set_min_speed(self, speed):
+--- a/klippy/extras/tmc.py
++++ b/klippy/extras/tmc.py
+@@ -154,8 +154,9 @@ class TMCErrorCheck:
+             count += 1
+             if count >= 3:
+                 fmt = self.fields.pretty_format(reg_name, val)
+-                raise self.printer.command_error("TMC '%s' reports error: %s"
+-                                                 % (self.stepper_name, fmt))
++                code_key = "key505"
++                m = """{"code":"%s","msg":"TMC '%s' reports error: %s"}""" % (code_key, self.stepper_name, fmt)
++                raise self.printer.command_error(m)
+             if try_clear and val & err_mask:
+                 try_clear = False
+                 cleared_flags |= val & err_mask
+--- a/klippy/extras/tmc_uart.py
++++ b/klippy/extras/tmc_uart.py
+@@ -248,5 +248,4 @@ class MCU_TMC_uart:
+                 self.ifcnt = self._do_get_register("IFCNT")
+                 if self.ifcnt == (ifcnt + 1) & 0xff:
+                     return
+-        raise self.printer.command_error(
+-            "Unable to write tmc uart '%s' register %s" % (self.name, reg_name))
++        raise self.printer.command_error("""{"code":"key570", "msg":"Unable to write tmc uart '%s' register %s"}""" % (self.name, reg_name))
+--- a/klippy/extras/verify_heater.py
++++ b/klippy/extras/verify_heater.py
+@@ -86,7 +86,15 @@ class HeaterCheck:
+     def heater_fault(self):
+         msg = "Heater %s not heating at expected rate" % (self.heater_name,)
+         logging.error(msg)
+-        self.printer.invoke_shutdown(msg + HINT_THERMAL)
++        code_key = "key558"
++        if self.heater_name == "extruder":
++            code_key = "key564"
++        elif self.heater_name == "heater_bed":
++            code_key = "key565"
++        elif self.heater_name == "chamber_heater":
++            code_key = "key559"
++        m = """{"code":"%s","msg":"Heater %s not heating at expected rate"}""" % (code_key, self.heater_name)
++        self.printer.invoke_shutdown(m)
+         return self.printer.get_reactor().NEVER
+ 
+ def load_config_prefix(config):
+--- a/klippy/extras/virtual_sdcard.py
++++ b/klippy/extras/virtual_sdcard.py
+@@ -183,7 +183,7 @@ class VirtualSD:
+             f.seek(0)
+         except:
+             logging.exception("virtual_sdcard file open")
+-            raise gcmd.error("Unable to open file")
++            raise gcmd.error("""{"code":"key121", "msg": "Unable to open file", "values": []}""")
+         gcmd.respond_raw("File opened:%s Size:%d" % (filename, fsize))
+         gcmd.respond_raw("File selected")
+         self.current_file = f
+--- a/klippy/gcode.py
++++ b/klippy/gcode.py
+@@ -57,26 +57,28 @@ class GCodeCommand:
+         value = self._params.get(name)
+         if value is None:
+             if default is self.sentinel:
+-                raise self.error("Error on '%s': missing %s"
+-                                 % (self._commandline, name))
++                raise self.error("""{"code":"key251", "msg":"Error on '%s': missing %s", "values":["%s",%s"]}"""
++                                 % (self._commandline, name, self._commandline, name))
+             return default
+         try:
+             value = parser(value)
+         except:
+-            raise self.error("Error on '%s': unable to parse %s"
+-                             % (self._commandline, value))
++            raise self.error(
++                             """{"code":"key171", "msg": "Unable to parse '%s' as a  %s", "values": ["%s", "%s"]}""" % (self._commandline, value,
++                                                                                                                  self._commandline, value)
++                             )
+         if minval is not None and value < minval:
+-            raise self.error("Error on '%s': %s must have minimum of %s"
+-                             % (self._commandline, name, minval))
++            raise self.error("""{"code":"key252","msg":"Error on '%s': %s must have minimum of %s","values":["%s","%s","%s"]}"""
++                             % (self._commandline, name, minval, self._commandline, name, minval))
+         if maxval is not None and value > maxval:
+-            raise self.error("Error on '%s': %s must have maximum of %s"
+-                             % (self._commandline, name, maxval))
++            raise self.error("""{"code":"key253", "msg":"Error on '%s': %s must have maximumof %s", "values":["%s","%s","%s"]}"""
++                             % (self._commandline, name, maxval, self._commandline, name, maxval))
+         if above is not None and value <= above:
+-            raise self.error("Error on '%s': %s must be above %s"
+-                             % (self._commandline, name, above))
++            raise self.error("""{"code":"key254", "msg":"Error on '%s': %s must be above %s", "values":["%s","%s","%s"]}"""
++                             % (self._commandline, name, above, self._commandline, name, above))
+         if below is not None and value >= below:
+-            raise self.error("Error on '%s': %s must be below %s"
+-                             % (self._commandline, name, below))
++            raise self.error("""{"code":"key255", "msg":"Error on '%s': %s must be below %s", "values":["%s","%s","%s"]}"""
++                             % (self._commandline, name, below, self._commandline, name, below))
+         return value
+     def get_int(self, name, default=sentinel, minval=None, maxval=None):
+         return self.get(name, default, parser=int, minval=minval, maxval=maxval)
+@@ -129,7 +131,7 @@ class GCodeDispatch:
+             return old_cmd
+         if cmd in self.ready_gcode_handlers:
+             raise self.printer.config_error(
+-                "gcode command %s already registered" % (cmd,))
++                """{"code":"key57", "msg":"gcode command %s already registered", "values": ["%s"]}""" % (cmd, cmd))
+         if not self.is_traditional_gcode(cmd):
+             origfunc = func
+             func = lambda params: origfunc(self._get_extended_params(params))
+@@ -147,12 +149,12 @@ class GCodeDispatch:
+         prev_key, prev_values = prev
+         if prev_key != key:
+             raise self.printer.config_error(
+-                "mux command %s %s %s may have only one key (%s)" % (
+-                    cmd, key, value, prev_key))
++                """{"code":"key58", "msg":"mux command %s %s %s may have only one key (%s)", "values": ["%s", "%s", "%s", "%s"]}""" % (
++                    cmd, key, value, prev_key, cmd, key, value, prev_key))
+         if value in prev_values:
+             raise self.printer.config_error(
+-                "mux command %s %s %s already registered (%s)" % (
+-                    cmd, key, value, prev_values))
++                """{"code":"key59", "msg":"mux command %s %s %s already registered (%s)", "values": ["%s", "%s", "%s", "%s"]}""" % (
++                    cmd, key, value, prev_values, cmd, key, value, prev_values))
+         prev_values[value] = func
+     def get_command_help(self):
+         return dict(self.gcode_help)
+@@ -246,8 +248,7 @@ class GCodeDispatch:
+     def _get_extended_params(self, gcmd):
+         m = self.extended_r.match(gcmd.get_commandline())
+         if m is None:
+-            raise self.error("Malformed command '%s'"
+-                             % (gcmd.get_commandline(),))
++            raise self.error("""{"code":"key513", "msg": "Malformed command '%s'", "values": ["%s"]}""" % (gcmd.get_commandline(), gcmd.get_commandline()))
+         eargs = m.group('args')
+         try:
+             eparams = [earg.split('=', 1) for earg in shlex.split(eargs)]
+@@ -256,8 +257,7 @@ class GCodeDispatch:
+             gcmd._params.update(eparams)
+             return gcmd
+         except ValueError as e:
+-            raise self.error("Malformed command '%s'"
+-                             % (gcmd.get_commandline(),))
++            raise self.error("""{"code":"key514", "msg": "Malformed command args '%s'", "values": ["%s"]}""" % (gcmd.get_commandline(), str(e)))
+     # G-Code special command handlers
+     def cmd_default(self, gcmd):
+         cmd = gcmd.get_command()
+@@ -289,7 +289,7 @@ class GCodeDispatch:
+                 not gcmd.get_float('S', 1.) or self.is_fileinput)):
+             # Don't warn about requests to turn off fan when fan not present
+             return
+-        gcmd.respond_info('Unknown command:"%s"' % (cmd,))
++        gcmd.respond_info("""{"code":"key61, "msg":"Unknown command:%s", "values": ["%s"]}""" % (cmd, cmd))
+     def _cmd_mux(self, command, gcmd):
+         key, values = self.mux_commands[command]
+         if None in values:
+@@ -297,8 +297,8 @@ class GCodeDispatch:
+         else:
+             key_param = gcmd.get(key)
+         if key_param not in values:
+-            raise gcmd.error("The value '%s' is not valid for %s"
+-                             % (key_param, key))
++            raise gcmd.error("""{"code":"key69", "msg": "The value '%s' is not valid for %s", "values": ["%s", "%s"]}"""
++                             % (key_param, key, key_param, key))
+         values[key_param](gcmd)
+     # Low-level G-Code commands that are needed before the config file is loaded
+     def cmd_M110(self, gcmd):
+@@ -306,7 +306,7 @@ class GCodeDispatch:
+         pass
+     def cmd_M112(self, gcmd):
+         # Emergency Stop
+-        self.printer.invoke_shutdown("Shutdown due to M112 command")
++        self.printer.invoke_shutdown("""{"code":"key70", "msg": "Shutdown due to M112 command", "values": []}""")
+     def cmd_M115(self, gcmd):
+         # Get Firmware Version and Capabilities
+         software_version = self.printer.get_start_args().get('software_version')
+@@ -345,7 +345,7 @@ class GCodeDispatch:
+     def cmd_HELP(self, gcmd):
+         cmdhelp = []
+         if not self.is_printer_ready:
+-            cmdhelp.append("Printer is not ready - not all commands available.")
++            cmdhelp.append("""{"code":"key72", "msg": "Printer is not ready - not all commands available.\n""")
+         cmdhelp.append("Available extended commands:")
+         for cmd in sorted(self.gcode_handlers):
+             if cmd in self.gcode_help:
+--- a/klippy/kinematics/extruder.py
++++ b/klippy/kinematics/extruder.py
+@@ -224,9 +224,18 @@ class PrinterExtruder:
+     def check_move(self, move):
+         axis_r = move.axes_r[3]
+         if not self.heater.can_extrude:
+-            raise self.printer.command_error(
+-                "Extrude below minimum temp\n"
+-                "See the 'min_extrude_temp' config option for details")
++            gcode = self.printer.lookup_object('gcode')
++            print_stats = self.printer.lookup_object('print_stats')
++            m = """{"code":"key111", "msg": "Extrude below minimum temp, See the 'min_extrude_temp' config option for details", "values": []}"""
++            if print_stats.state == "printing" and self.extrude_below_min_temp_err_is_report==False:
++                gcode._respond_error(m)
++                self.extrude_below_min_temp_err_is_report = True
++                gcode.respond_info("state:%s pause_start:%s" % (self.printer.lookup_object('print_stats').state, self.printer.lookup_object('pause_resume').pause_start))
++                if self.printer.lookup_object('print_stats').state == "printing" and self.printer.lookup_object('pause_resume').pause_start == False:
++                    self.printer.lookup_object('gcode').run_script_from_command("PAUSE")
++            elif print_stats.state == "standby":
++                gcode._respond_error(m)
++            return
+         if (not move.axes_d[0] and not move.axes_d[1]) or axis_r < 0.:
+             # Extrude only move (or retraction move) - limit accel and velocity
+             if abs(move.axes_d[3]) > self.max_e_dist:
+@@ -245,9 +254,9 @@ class PrinterExtruder:
+             logging.debug("Overextrude: %s vs %s (area=%.3f dist=%.3f)",
+                           axis_r, self.max_extrude_ratio, area, move.move_d)
+             raise self.printer.command_error(
+-                "Move exceeds maximum extrusion (%.3fmm^2 vs %.3fmm^2)\n"
+-                "See the 'max_extrude_cross_section' config option for details"
+-                % (area, self.max_extrude_ratio * self.filament_area))
++                """{"code":"key112", "msg": "Move exceeds maximum extrusion (%.3fmm^2 vs %.3fmm^2)\nSee the 'max_extrude_cross_section' config option for details", "values": [%.3f, %.3f]}"""
++                % (
++                area, self.__max_extrude_ratio * self.filament_area, area, self.__max_extrude_ratio * self.filament_area))
+     def calc_junction(self, prev_move, move):
+         diff_r = move.axes_r[3] - prev_move.axes_r[3]
+         if diff_r:
+@@ -284,7 +293,7 @@ class PrinterExtruder:
+             if extruder is None:
+                 if temp <= 0.:
+                     return
+-                raise gcmd.error("Extruder not configured")
++                raise gcmd.error("""{"code":"key113", "msg": "Extruder not configured", "values": []}""")
+         else:
+             extruder = self.printer.lookup_object('toolhead').get_extruder()
+         pheaters = self.printer.lookup_object('heaters')
+--- a/klippy/klippy.py
++++ b/klippy/klippy.py
+@@ -10,11 +10,7 @@ import gcode, configfile, pins, mcu, toolhead, webhooks
+ 
+ message_ready = "Printer is ready"
+ 
+-message_startup = """
+-Printer is not ready
+-The klippy host software is attempting to connect.  Please
+-retry in a few moments.
+-"""
++message_startup = """{"code":"key3", "msg":"Printer is not ready The klippy host software is attempting to connect.  Please retry in a few moments."}"""
+ 
+ message_restart = """
+ Once the underlying issue is corrected, use the "RESTART"
+@@ -23,9 +19,9 @@ Printer is halted
+ """
+ 
+ message_protocol_error1 = """
+-This is frequently caused by running an older version of the
+-firmware on the MCU(s). Fix by recompiling and flashing the
+-firmware.
++This type of error is frequently caused by running an older
++version of the firmware on the micro-controller (fix by
++recompiling and flashing the firmware).
+ """
+ 
+ message_protocol_error2 = """
+@@ -35,14 +31,14 @@ command to reload the config and restart the host software.
+ 
+ message_mcu_connect_error = """
+ Once the underlying issue is corrected, use the
+-"FIRMWARE_RESTART" command to reset the firmware, reload the
++'FIRMWARE_RESTART' command to reset the firmware, reload the
+ config, and restart the host software.
+ Error configuring printer
+ """
+ 
+ message_shutdown = """
+ Once the underlying issue is corrected, use the
+-"FIRMWARE_RESTART" command to reset the firmware, reload the
++'FIRMWARE_RESTART' command to reset the firmware, reload the
+ config, and restart the host software.
+ Printer is shutdown
+ """
+@@ -88,13 +84,13 @@ class Printer:
+     def add_object(self, name, obj):
+         if name in self.objects:
+             raise self.config_error(
+-                "Printer object '%s' already created" % (name,))
++                """{"code":"key123", "msg": "Printer object '%s' already created", "values": ["%s"]}""" % (name, name))
+         self.objects[name] = obj
+     def lookup_object(self, name, default=configfile.sentinel):
+         if name in self.objects:
+             return self.objects[name]
+         if default is configfile.sentinel:
+-            raise self.config_error("Unknown config object '%s'" % (name,))
++            raise self.config_error("""{"code":"key122", "msg": "Unknown config object '%s'", "values": ["%s"]}""" % (name, name))
+         return default
+     def lookup_objects(self, module=None):
+         if module is None:
+@@ -189,7 +185,11 @@ class Printer:
+             return
+         except mcu.error as e:
+             logging.exception("MCU error during connect")
+-            self._set_state("%s%s" % (str(e), message_mcu_connect_error))
++            if '"msg"' in str(e):
++                json_msg = str(e)
++            else:
++                json_msg = '{"code":"key0", "msg":"%s%s"}' % (str(e), message_mcu_connect_error)
++            self._set_state(json_msg)
+             util.dump_mcu_build()
+             return
+         except Exception as e:
+@@ -244,9 +244,14 @@ class Printer:
+     def invoke_shutdown(self, msg):
+         if self.in_shutdown_state:
+             return
++        logging.info("+++++++++++++++invoke_shutdown")
+         logging.error("Transition to shutdown state: %s", msg)
+         self.in_shutdown_state = True
+-        self._set_state("%s%s" % (msg, message_shutdown))
++        if "{" in msg:
++            result = msg
++        else:
++            result = '{"code":"key1", "msg":"%s%s"}' % (msg, message_shutdown.replace('"',"'"))
++        self._set_state(result)
+         for cb in self.event_handlers.get("klippy:shutdown", []):
+             try:
+                 cb()
+--- a/klippy/mcu.py
++++ b/klippy/mcu.py
+@@ -159,8 +159,8 @@ class MCU_endstop:
+                 for s in ot.get_steppers():
+                     if ot is not trsync and s.get_name().startswith(sname[:9]):
+                         cerror = self._mcu.get_printer().config_error
+-                        raise cerror("Multi-mcu homing not supported on"
+-                                     " multi-mcu shared axis")
++                        raise cerror("""{"code": "key287", "msg": "Multi-mcu homing not supported on multi-mcu shared axis", "values":[]}""")
++
+     def get_steppers(self):
+         return [s for trsync in self._trsyncs for s in trsync.get_steppers()]
+     def _build_config(self):
+@@ -245,7 +245,7 @@ class MCU_digital_out:
+         self._max_duration = max_duration
+     def setup_start_value(self, start_value, shutdown_value, is_static=False):
+         if is_static and start_value != shutdown_value:
+-            raise pins.error("Static pin can not have shutdown value")
++            raise pins.error("""{"code": "key288", "msg": "Static pin can not have shutdown value", "values":[]}""")
+         self._start_value = (not not start_value) ^ self._invert
+         self._shutdown_value = (not not shutdown_value) ^ self._invert
+         self._is_static = is_static
+@@ -255,11 +255,11 @@ class MCU_digital_out:
+                                      % (self._pin, self._start_value))
+             return
+         if self._max_duration and self._start_value != self._shutdown_value:
+-            raise pins.error("Pin with max duration must have start"
+-                             " value equal to shutdown value")
++            raise pins.error("""{"code": "key289", "msg": "Pin with max duration must have start value equal to shutdown value", "values":[]}""")
++
+         mdur_ticks = self._mcu.seconds_to_clock(self._max_duration)
+         if mdur_ticks >= 1<<31:
+-            raise pins.error("Digital pin max duration too large")
++            raise pins.error("""{"code": "key290", "msg": "Digital pin max duration too large", "values":[]}""")
+         self._mcu.request_move_queue_slot()
+         self._oid = self._mcu.create_oid()
+         self._mcu.add_config_cmd(
+@@ -302,7 +302,7 @@ class MCU_pwm:
+         self._hardware_pwm = hardware_pwm
+     def setup_start_value(self, start_value, shutdown_value, is_static=False):
+         if is_static and start_value != shutdown_value:
+-            raise pins.error("Static pin can not have shutdown value")
++            raise pins.error("""{"code": "key288", "msg": "Static pin can not have shutdown value", "values":[]}""")
+         if self._invert:
+             start_value = 1. - start_value
+             shutdown_value = 1. - shutdown_value
+@@ -311,8 +311,8 @@ class MCU_pwm:
+         self._is_static = is_static
+     def _build_config(self):
+         if self._max_duration and self._start_value != self._shutdown_value:
+-            raise pins.error("Pin with max duration must have start"
+-                             " value equal to shutdown value")
++            raise pins.error("""{"code": "key289", "msg": "Pin with max duration must have start value equal to shutdown value", "values":[]}""")
++
+         cmd_queue = self._mcu.alloc_command_queue()
+         curtime = self._mcu.get_printer().get_reactor().monotonic()
+         printtime = self._mcu.estimated_print_time(curtime)
+@@ -320,7 +320,7 @@ class MCU_pwm:
+         cycle_ticks = self._mcu.seconds_to_clock(self._cycle_time)
+         mdur_ticks = self._mcu.seconds_to_clock(self._max_duration)
+         if mdur_ticks >= 1<<31:
+-            raise pins.error("PWM pin max duration too large")
++            raise pins.error("""{"code": "key290", "msg": "Digital pin max duration too large", "values":[]}""")
+         if self._hardware_pwm:
+             self._pwm_max = self._mcu.get_constant_float("PWM_MAX")
+             if self._is_static:
+@@ -346,13 +346,13 @@ class MCU_pwm:
+             return
+         # Software PWM
+         if self._shutdown_value not in [0., 1.]:
+-            raise pins.error("shutdown value must be 0.0 or 1.0 on soft pwm")
++            raise pins.error("""{"code": "key291", "msg": "shutdown value must be 0.0 or 1.0 on soft pwm", "values":[]}""")
+         if self._is_static:
+             self._mcu.add_config_cmd("set_digital_out pin=%s value=%d"
+                                      % (self._pin, self._start_value >= 0.5))
+             return
+         if cycle_ticks >= 1<<31:
+-            raise pins.error("PWM pin cycle time too large")
++            raise pins.error("""{"code": "key292", "msg": "PWM pin cycle time too large", "values":[]}""")
+         self._mcu.request_move_queue_slot()
+         self._oid = self._mcu.create_oid()
+         self._mcu.add_config_cmd(
+@@ -390,7 +390,7 @@ class MCU_pwm:
+         if cycle_ticks != self._last_cycle_ticks:
+             if cycle_ticks >= 1<<31:
+                 raise self._mcu.get_printer().command_error(
+-                    "PWM cycle time too large")
++                    """{"code": "key293", "msg": "PWM cycle time too large", "values":[]}""")
+             self._set_cycle_ticks.send([self._oid, cycle_ticks],
+                                        minclock=minclock, reqclock=clock)
+             self._last_cycle_ticks = cycle_ticks
+@@ -484,8 +484,8 @@ class RetryAsyncCommand:
+             query_time = self.reactor.monotonic()
+             if query_time > first_query_time + self.TIMEOUT_TIME:
+                 self.serial.register_response(None, self.name, self.oid)
+-                raise serialhdl.error("Timeout on wait for '%s' response"
+-                                      % (self.name,))
++                raise serialhdl.error("""{"code": "key294", "msg": "Timeout on wait for '%s' response", "values":["%s"]}"""
++                                      % (self.oid, self.name))
+             self.serial.raw_send(cmd, minclock, minclock, cmd_queue)
+ 
+ # Wrapper around query commands
+@@ -621,7 +621,44 @@ class MCU:
+         prefix = "MCU '%s' shutdown: " % (self._name,)
+         if params['#name'] == 'is_shutdown':
+             prefix = "Previous MCU '%s' shutdown: " % (self._name,)
+-        self._printer.invoke_async_shutdown(prefix + msg + error_help(msg))
++        code_key_string = ""
++        if msg == "Timer too close":
++            logging.error("msg is Timer too close!!!")
++            code_key_string = "key90"
++        elif msg == "Missed scheduling of next ":
++            code_key_string = "key91"
++        elif msg == "ADC out of range":
++            code_key_string = "key92"
++            mcu_temp_obj = self._printer.lookup_object('temperature_sensor mcu_temp') if self._printer.objects.get('temperature_sensor mcu_temp') else None
++            chamber_temp_obj = self._printer.lookup_object('temperature_sensor chamber_temp') if self._printer.objects.get('temperature_sensor chamber_temp') else None
++            heater_bed_obj = self._printer.lookup_object('heater_bed') if self._printer.objects.get('heater_bed') else None
++            extruder_obj = self._printer.lookup_object('extruder') if self._printer.objects.get('extruder') else None
++            if extruder_obj and extruder_obj.heater.smoothed_temp < 0:
++                msg += " extruder_temp:%s" % round(extruder_obj.heater.smoothed_temp, 2)
++                code_key_string = "key509"
++            if heater_bed_obj and heater_bed_obj.heater.smoothed_temp < 0:
++                msg += " heater_bed_temp:%s" % round(heater_bed_obj.heater.smoothed_temp, 2)
++                code_key_string = "key510"
++            if chamber_temp_obj and chamber_temp_obj.last_temp < 0:
++                msg += " chamber_temp:%s" % round(chamber_temp_obj.last_temp, 2)
++                code_key_string = "key511"
++            if mcu_temp_obj and mcu_temp_obj.last_temp < 0:
++                msg += " mcu_temp:%s" % round(mcu_temp_obj.last_temp, 2)
++                code_key_string = "key512"
++        elif msg == "Rescheduled timer in the past":
++            code_key_string = "key93"
++        elif msg == "Stepper too far in past":
++            code_key_string = "key353"
++        elif msg == "Command request":
++            code_key_string = "key94"
++        elif msg == "Scheduled digital out event will exceed max_duration":
++            code_key_string = "key354"
++        elif msg == "Missed scheduling of next digital out event":
++            code_key_string = "key355"
++        elif msg == "update_digital_out not valid with active queue":
++            code_key_string = "key356"
++        self._printer.invoke_async_shutdown(
++            """{"code": "%s", "msg":"%s", "values": []}""" % (code_key_string, prefix + msg + error_help(msg)))
+     def _handle_starting(self, params):
+         if not self._is_shutdown:
+             self._printer.invoke_async_shutdown("MCU '%s' spontaneous restart"
+@@ -635,7 +672,7 @@ class MCU:
+                      self._name, reason)
+         self._printer.request_exit('firmware_restart')
+         self._reactor.pause(self._reactor.monotonic() + 2.000)
+-        raise error("Attempt MCU '%s' restart failed" % (self._name,))
++        raise error("""{"code": "key295", "msg": "Attempt MCU '%s' restart failed", "values":["%s"]}""" % (self._name, self._name))
+     def _connect_file(self, pace=False):
+         # In a debugging mode.  Open debug output file and read data dictionary
+         start_args = self._printer.get_start_args()
+@@ -675,7 +712,7 @@ class MCU:
+         self.add_config_cmd("finalize_config crc=%d" % (config_crc,))
+         if prev_crc is not None and config_crc != prev_crc:
+             self._check_restart("CRC mismatch")
+-            raise error("MCU '%s' CRC does not match config" % (self._name,))
++            raise error("""{"code": "key296", "msg": "MCU '%s' CRC does not match config", "values":["%s"]}""" % (self._name, self._name))
+         # Transmit config messages (if needed)
+         self.register_response(self._handle_starting, 'starting')
+         try:
+@@ -695,8 +732,8 @@ class MCU:
+             if enum_name == 'pin':
+                 # Raise pin name errors as a config error (not a protocol error)
+                 raise self._printer.config_error(
+-                    "Pin '%s' is not a valid pin name on mcu '%s'"
+-                    % (enum_value, self._name))
++                    """{"code": "key297", "msg": "Pin '%s' is not a valid pin name on mcu '%s'", "values":["%s", "%s"]}"""
++                    % (enum_value, self._name, enum_value, self._name))
+             raise
+     def _send_get_config(self):
+         get_config_cmd = self.lookup_query_command(
+@@ -706,11 +743,11 @@ class MCU:
+             return { 'is_config': 0, 'move_count': 500, 'crc': 0 }
+         config_params = get_config_cmd.send()
+         if self._is_shutdown:
+-            raise error("MCU '%s' error during config: %s" % (
+-                self._name, self._shutdown_msg))
++            raise error("""{"code": "key300", "msg": "MCU '%s' error during config: %s", "values":["%s", "%s"]}""" % (
++                self._name, self._shutdown_msg, self._name, self._shutdown_msg))
+         if config_params['is_shutdown']:
+-            raise error("Can not update MCU '%s' config as it is shutdown" % (
+-                self._name,))
++            raise error("""{"code": "key298", "msg": "Can not update MCU %s config as it is shutdown", "values":["%s"]}""" % (
++                self._name, self._name))
+         return config_params
+     def _log_info(self):
+         msgparser = self._serial.get_msgparser()
+@@ -732,18 +769,18 @@ class MCU:
+             self._send_config(None)
+             config_params = self._send_get_config()
+             if not config_params['is_config'] and not self.is_fileoutput():
+-                raise error("Unable to configure MCU '%s'" % (self._name,))
++                raise error("""{"code": "key299", "msg": "Unable to configure MCU '%s'", "values":["%s"]}""" % (self._name, self._name))
+         else:
+             start_reason = self._printer.get_start_args().get("start_reason")
+             if start_reason == 'firmware_restart':
+-                raise error("Failed automated reset of MCU '%s'"
+-                            % (self._name,))
++                raise error("""{"code": "key301", "msg": "Failed automated reset of MCU '%s'", "values":["%s"]}"""
++                            % (self._name, self._name))
+             # Already configured - send init commands
+             self._send_config(config_params['crc'])
+         # Setup steppersync with the move_count returned by get_config
+         move_count = config_params['move_count']
+         if move_count < self._reserved_move_slots:
+-            raise error("Too few moves available on MCU '%s'" % (self._name,))
++            raise error("""{"code": "key302", "msg": "Too few moves available on MCU '%s'", "values":["%s"]}""" % (self._name, self._name))
+         ffi_main, ffi_lib = chelper.get_ffi()
+         self._steppersync = ffi_main.gc(
+             ffi_lib.steppersync_alloc(self._serial.get_serialqueue(),
+@@ -813,7 +850,7 @@ class MCU:
+         pcs = {'endstop': MCU_endstop,
+                'digital_out': MCU_digital_out, 'pwm': MCU_pwm, 'adc': MCU_adc}
+         if pin_type not in pcs:
+-            raise pins.error("pin type %s not supported on mcu" % (pin_type,))
++            raise pins.error("""{"code": "key303", "msg": "pin type %s not supported on mcu", "values":["%s"]}""" % (pin_type, pin_type))
+         return pcs[pin_type](self, pin_params)
+     def create_oid(self):
+         self._oid_count += 1
+@@ -959,8 +996,18 @@ class MCU:
+         self._is_timeout = True
+         logging.info("Timeout with MCU '%s' (eventtime=%f)",
+                      self._name, eventtime)
+-        self._printer.invoke_shutdown("Lost communication with MCU '%s'" % (
+-            self._name,))
++        #code_key = "key506"
++        code_key = "key560"
++        if self._name == "mcu":
++            code_key = "key560"
++        elif self._name == "nozzle_mcu":
++            code_key = "key561"
++        elif self._name == "leveling_mcu":
++            code_key = "key562"
++        elif self._name == "rpi":
++            code_key = "key563"
++        m = """{"code":"%s","msg":"Lost communication with MCU '%s'"}""" % (code_key, self._name)
++        self._printer.invoke_shutdown(m)
+     def get_status(self, eventtime=None):
+         return dict(self._get_status_info)
+     def stats(self, eventtime):
+--- a/klippy/msgproto.py
++++ b/klippy/msgproto.py
+@@ -88,8 +88,8 @@ class enumeration_error(error):
+     def __init__(self, enum_name, value):
+         self.enum_name = enum_name
+         self.value = value
+-        error.__init__(self, "Unknown value '%s' in enumeration '%s'"
+-                       % (value, enum_name))
++        error.__init__(self, """{"code":"key115", "msg": "Unknown value '%s' in enumeration '%s'", "values": ["%s", "%s"]}"""
++                       % (value, enum_name, value, enum_name))
+     def get_enum_params(self):
+         return self.enum_name, self.value
+ 
+@@ -149,7 +149,7 @@ def lookup_output_params(msgformat):
+                     param_types.append(t)
+                     break
+             else:
+-                raise error("Invalid output format for '%s'" % (msgformat,))
++                raise error("""{"code":"key116", "msg": "Invalid output format for '%s'", "values": ["%s"]}""" % (msgformat,msgformat))
+         args = args[pos+1:]
+     return param_types
+ 
+@@ -286,7 +286,7 @@ class MessageParser:
+         mid = self.messages_by_id.get(msgid, self.unknown)
+         params, pos = mid.parse(s, MESSAGE_HEADER_SIZE)
+         if pos != len(s)-MESSAGE_TRAILER_SIZE:
+-            self._error("Extra data at end of message")
++            self._error("""{"code":"key117", "msg": "Extra data at end of message", "values": []}""")
+         params['#name'] = mid.name
+         return params
+     def encode(self, seq, cmd):
+--- a/klippy/serialhdl.py
++++ b/klippy/serialhdl.py
+@@ -178,8 +178,15 @@ class SerialReader:
+         logging.info("%sStarting serial connect", self.warn_prefix)
+         start_time = self.reactor.monotonic()
+         while 1:
+-            if self.reactor.monotonic() > start_time + 90.:
+-                self._error("Unable to connect")
++            if self.reactor.monotonic() > start_time + 50.:
++                key = 343
++                if "'mcu'" in self.warn_prefix:
++                    key = 343
++                elif "'nozzle_mcu'" in self.warn_prefix:
++                    key = 344
++                elif "'leveling_mcu'" in self.warn_prefix:
++                    key = 345
++                raise error("""{"code": "key%s", "msg": "Unable to connect %s", "values":["%s"]}""" % (key, self.warn_prefix, self.warn_prefix))
+             try:
+                 serial_dev = serial.Serial(baudrate=baud, timeout=0,
+                                            exclusive=True)
+--- a/klippy/stepper.py
++++ b/klippy/stepper.py
+@@ -344,8 +344,8 @@ class PrinterRail:
+                 self.homing_positive_dir = True
+             else:
+                 raise config.error(
+-                    "Unable to infer homing_positive_dir in section '%s'"
+-                    % (config.get_name(),))
++                   """{"code":"key75", "msg": "Unable to infer homing_positive_dir in section '%s'", "values": ["%s"]"""
++                    % (config.get_name(),config.get_name()))
+             config.getboolean('homing_positive_dir', self.homing_positive_dir)
+         elif ((self.homing_positive_dir
+                and self.position_endstop == self.position_min)
+@@ -398,9 +398,8 @@ class PrinterRail:
+             changed_invert = pin_params['invert'] != endstop['invert']
+             changed_pullup = pin_params['pullup'] != endstop['pullup']
+             if changed_invert or changed_pullup:
+-                raise error("Pinter rail %s shared endstop pin %s "
+-                            "must specify the same pullup/invert settings" % (
+-                                self.get_name(), pin_name))
++                raise error("""{"code":"key76", "msg": "Pinter rail %s shared endstop pin %s must specify the same pullup/invert settings", "values": ["%s", "%s"]}""" % (
++                                self.get_name(), pin_name, self.get_name(), pin_name))
+         mcu_endstop.add_stepper(stepper)
+     def setup_itersolve(self, alloc_func, *params):
+         for stepper in self.steppers:
+--- a/klippy/toolhead.py
++++ b/klippy/toolhead.py
+@@ -589,8 +589,8 @@ class ToolHead:
+             p = gcmd.get_float('P', None, above=0.)
+             t = gcmd.get_float('T', None, above=0.)
+             if p is None or t is None:
+-                gcmd.respond_info('Invalid M204 command "%s"'
+-                                  % (gcmd.get_commandline(),))
++                gcmd.respond_info("""{"code":"key73", "msg": "Invalid M204 command "%s"", "values": ["%s"]}"""
++                                  % (gcmd.get_commandline(),gcmd.get_commandline()))
+                 return
+             accel = min(p, t)
+         self.max_accel = accel
+--- a/klippy/webhooks.py
++++ b/klippy/webhooks.py
+@@ -49,7 +49,7 @@ class WebRequest:
+         self.method = base_request.get('method')
+         self.params = base_request.get('params', {})
+         if type(self.method) != str or type(self.params) != dict:
+-            raise ValueError("Invalid request type")
++            raise ValueError("""{"code":"key178", "msg": "Invalid request type", "values": []}""")
+         self.response = None
+         self.is_error = False
+ 
+@@ -59,10 +59,10 @@ class WebRequest:
+     def get(self, item, default=Sentinel, types=None):
+         value = self.params.get(item, default)
+         if value is Sentinel:
+-            raise WebRequestError("Missing Argument [%s]" % (item,))
++            raise WebRequestError("""{"code":"key179", "msg": "Missing Argument [%s]", "values": ["%s"]}""" % (item, item))
+         if (types is not None and type(value) not in types
+             and item in self.params):
+-            raise WebRequestError("Invalid Argument Type [%s]" % (item,))
++            raise WebRequestError("""{"code":"key180", "msg": "Invalid Argument Type [%s]", "values": ["%s"]}""" % (item, item))
+         return value
+ 
+     def get_str(self, item, default=Sentinel):
+@@ -319,12 +319,12 @@ class WebHooks:
+         prev_key, prev_values = prev
+         if prev_key != key:
+             raise self.printer.config_error(
+-                "mux endpoint %s %s %s may have only one key (%s)"
+-                % (path, key, value, prev_key))
++                """{"code":"key182", "msg": "mux endpoint %s %s %s may have only one key (%s)", "values": ["%s", "%s", "%s", "%s"]}"""
++                % (path, key, value, prev_key, path, key, value, prev_key))
+         if value in prev_values:
+             raise self.printer.config_error(
+-                "mux endpoint %s %s %s already registered (%s)"
+-                % (path, key, value, prev_values))
++                """{"code":"key182", "msg": "mux endpoint %s %s %s already registered (%s)", "values": ["%s", "%s", "%s", "%s"]}"""
++                % (path, key, value, prev_values, path, key, value, prev_values))
+         prev_values[value] = callback
+ 
+     def _handle_mux(self, web_request):
+@@ -334,8 +334,8 @@ class WebHooks:
+         else:
+             key_param = web_request.get(key)
+         if key_param not in values:
+-            raise web_request.error("The value '%s' is not valid for %s"
+-                                    % (key_param, key))
++            raise web_request.error("""{"code":"key183", "msg": "The value '%s' is not valid for %s", "values": ["%s", "%s"]}"""
++                                    % (key_param, key, key_param, key))
+         values[key_param](web_request)
+ 
+     def _handle_list_endpoints(self, web_request):
+@@ -373,7 +373,7 @@ class WebHooks:
+     def get_callback(self, path):
+         cb = self._endpoints.get(path, None)
+         if cb is None:
+-            msg = "webhooks: No registered callback for path '%s'" % (path)
++            msg = """{"code":"key184", "msg": "webhooks: No registered callback for path '%s'", "values": ["%s"]}""" % (path, path)
+             logging.info(msg)
+             raise WebRequestError(msg)
+         return cb
+@@ -388,7 +388,7 @@ class WebHooks:
+     def call_remote_method(self, method, **kwargs):
+         if method not in self._remote_methods:
+             raise self.printer.command_error(
+-                "Remote method '%s' not registered" % (method))
++                """{"code":"key185", "msg": "Remote method '%s' not registered", "values": ["%s"]}""" % (method, method))
+         conn_map = self._remote_methods[method]
+         valid_conns = {}
+         for conn, template in conn_map.items():
+@@ -400,7 +400,7 @@ class WebHooks:
+         if not valid_conns:
+             del self._remote_methods[method]
+             raise self.printer.command_error(
+-                "No active connections for method '%s'" % (method))
++                """{"code":"key186", "msg": "No active connections for method '%s'", "values": ["%s"]}""" % (method, method))
+         self._remote_methods[method] = valid_conns
+ 
+ class GCodeHelper:
+@@ -512,11 +512,11 @@ class QueryStatusHelper:
+         # Validate subscription format
+         for k, v in objects.items():
+             if type(k) != str or (v is not None and type(v) != list):
+-                raise web_request.error("Invalid argument")
++                raise web_request.error("""{"code":"key187", "msg": "Invalid argument", "values": []}""")
+             if v is not None:
+                 for ri in v:
+                     if type(ri) != str:
+-                        raise web_request.error("Invalid argument")
++                        raise web_request.error("""{"code":"key187", "msg": "Invalid argument", "values": []}""")
+         # Add to pending queries
+         cconn = web_request.get_client_connection()
+         template = web_request.get_dict('response_template', {})
