@@ -1,0 +1,134 @@
+--- a/klippy/chelper/__init__.py
++++ b/klippy/chelper/__init__.py
+@@ -46,12 +46,12 @@ SOURCE_FILES = [
+     'pollreactor.c', 'msgblock.c', 'trdispatch.c',
+     'kin_cartesian.c', 'kin_corexy.c', 'kin_corexz.c', 'kin_delta.c',
+     'kin_deltesian.c', 'kin_polar.c', 'kin_rotary_delta.c', 'kin_winch.c',
+-    'kin_extruder.c', 'kin_shaper.c',
++    'kin_extruder.c', 'kin_shaper.c', 'serial_485_queue.c', 'msgblock_485.c',
+ ]
+ DEST_LIB = "c_helper.so"
+ OTHER_FILES = [
+     'list.h', 'serialqueue.h', 'stepcompress.h', 'itersolve.h', 'pyhelper.h',
+-    'trapq.h', 'pollreactor.h', 'msgblock.h'
++    'trapq.h', 'pollreactor.h', 'msgblock.h', 'serial_485_queue.h', 'msgblock_485.h',
+ ]
+ 
+ defs_stepcompress = """
+@@ -231,12 +231,27 @@ defs_std = """
+     void free(void*);
+ """
+ 
++defs_serial_485_queue = """
++    #define BUFFER_MAX 512
++    struct pull_message {
++        int len;
++        uint8_t msg[BUFFER_MAX];
++    };
++    void serial_485_queue_send(struct serial_485_queue *sq, uint8_t *msg, int len);
++    void serial_485_queue_pull(struct serial_485_queue *sq, struct pull_message *pqm);
++    void serial_485_queue_get_stats(struct serial_485_queue *sq, char *buf, int len);
++    struct serial_485_queue * serial_485_queue_alloc(int serial_fd, char serial_fd_type);
++    void serial_485_queue_free(struct serial_485_queue *sq);
++    void serial_485_queue_exit(struct serial_485_queue *sq);
++    uint8_t msgblock_485_crc8(const uint8_t *data, uint32_t len);
++"""
++
+ defs_all = [
+     defs_pyhelper, defs_serialqueue, defs_std, defs_stepcompress,
+     defs_itersolve, defs_trapq, defs_trdispatch,
+     defs_kin_cartesian, defs_kin_corexy, defs_kin_corexz, defs_kin_delta,
+     defs_kin_deltesian, defs_kin_polar, defs_kin_rotary_delta, defs_kin_winch,
+-    defs_kin_extruder, defs_kin_shaper,
++    defs_kin_extruder, defs_kin_shaper, defs_serial_485_queue,
+ ]
+ 
+ # Update filenames to an absolute path
+new file mode 100644
+--- /dev/null
++++ b/klippy/chelper/msgblock_485.h
+@@ -0,0 +1,22 @@
++#ifndef MSGBLOCK_485_H
++#define MSGBLOCK_485_H
++
++#include <stdint.h>
++
++/* head + addr + msglen + data, msglen >= 3, data = state + func + data + crc,  */
++#define MESSAGE_BUF_MIN (6)
++#define MESSAGE_485_MIN (3)
++#define MESSAGE_485_MAX (255)
++#define MESSAGE_485_HEAD (0xF7)
++#define MESSAGE_485_POS_HEAD (0)
++#define MESSAGE_485_POS_LEN (2)
++#define MESSAGE_485_HEADER_SIZE (1)
++#define MESSAGE_485_TRAILER_CRC (1) // crc
++#define MESSAGE_485_TRAILER_SIZE (1) // crc
++#define MAX_PENDING_BLOCKS_485 (1) // ask and answer interchangeably
++#define MESSAGE_485_SIZE_OUTSIDE_DATA (3) // head + addr +len
++
++uint8_t msgblock_485_crc8(const uint8_t *data, uint32_t len);
++int msgblock_485_check(uint8_t *need_sync, uint8_t *buf, int buf_len);
++
++#endif /* MSGBLOCK_485_H */
+new file mode 100644
+--- /dev/null
++++ b/klippy/chelper/serial_485_queue.h
+@@ -0,0 +1,51 @@
++#ifndef SERIAL_485_QUEUE_H
++#define SERIAL_485_QUEUE_H
++
++#include "msgblock_485.h"
++#include "list.h" // struct list_node
++
++#define BUFFER_MAX 512
++
++struct queue_485_message {
++    int len;
++    uint8_t msg[BUFFER_MAX];
++    struct list_node node;
++};
++
++struct pull_message {
++    int len;
++    uint8_t msg[BUFFER_MAX];
++};
++
++struct serial_485_queue {
++    // Input reading
++    struct pollreactor *pr;
++    int serial_fd, serial_fd_type;
++    int pipe_fds[2];
++    uint8_t input_buf[4096];
++    uint8_t need_sync;
++    int input_pos;
++    // Threading
++    pthread_t tid;
++    pthread_mutex_t lock; // protects variables below
++    pthread_cond_t cond;
++    int receive_waiting;
++    // Pending transmission message queues
++    struct queue_485_message *pending_queues;
++    // Received messages
++    // struct list_head receive_queue;
++    struct queue_485_message *receive_queue;
++    // Debugging
++    struct list_head old_sent, old_receive;
++    // Stats
++    uint32_t bytes_write, bytes_read, bytes_invalid;
++};
++
++void serial_485_queue_send(struct serial_485_queue *sq, uint8_t *msg, int len);
++void serial_485_queue_pull(struct serial_485_queue *sq, struct pull_message *pqm);
++void serial_485_queue_get_stats(struct serial_485_queue *sq, char *buf, int len);
++struct serial_485_queue * serial_485_queue_alloc(int serial_fd, char serial_fd_type);
++void serial_485_queue_free(struct serial_485_queue *sq);
++void serial_485_queue_exit(struct serial_485_queue *sq);
++
++#endif /* SERIAL_485_QUEUE_H */
+new file mode 100644
+--- /dev/null
++++ b/klippy/extras/serial_485.py
+@@ -0,0 +1,3 @@
++from .serial_485_wrapper import Serial_485_Wrapper
++def load_config_prefix(config):
++    return(Serial_485_Wrapper(config))

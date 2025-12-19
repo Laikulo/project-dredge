@@ -8,4 +8,6 @@
 0008-creality-configs.patch
 0009-fancy-error-messages.patch
 0010-kinematics-helper-to-clear-xy-home.patch
+0011-automatic-rs485-address.patch
+0012-rs485.patch
 9999-none-of-the-above.patch
