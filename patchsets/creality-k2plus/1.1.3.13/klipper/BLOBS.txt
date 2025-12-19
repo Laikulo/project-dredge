@@ -1,0 +1,9 @@
+./klippy/extras/box_wrapper.cpython-39.so
+./klippy/extras/filament_rack_wrapper.cpython-39.so
+./klippy/extras/motor_control_wrapper.cpython-39.so
+./klippy/extras/prtouch_v1_wrapper.cpython-39.so
+./klippy/extras/prtouch_v2_wrapper.cpython-39.so
+./klippy/extras/prtouch_v3_wrapper.cpython-39.so
+./klippy/extras/serial_485_wrapper.cpython-39.so
+./klippy/mymodule/mymovie.cpython-39.so
+
