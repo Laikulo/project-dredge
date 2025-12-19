@@ -11842,18 +11842,6 @@
              except os.error:
                  logging.exception("Write g-code response")
                  self.pipe_is_active = False
---- a/klippy/kinematics/cartesian.py
-+++ b/klippy/kinematics/cartesian.py
-@@ -61,6 +61,9 @@ class CartKinematics:
-     def note_z_not_homed(self):
-         # Helper for Safe Z Home
-         self.limits[2] = (1.0, -1.0)
-+    def note_xy_not_homed(self):
-+        self.limits[0] = (1.0, -1.0)
-+        self.limits[1] = (1.0, -1.0)
-     def _home_axis(self, homing_state, axis, rail):
-         # Determine movement
-         position_min, position_max = rail.get_range()
 --- a/klippy/kinematics/corexy.py
 +++ b/klippy/kinematics/corexy.py
 @@ -5,6 +5,8 @@
@@ -11865,7 +11853,7 @@
  
  class CoreXYKinematics:
      def __init__(self, toolhead, config):
-@@ -25,27 +27,111 @@ class CoreXYKinematics:
+@@ -25,30 +27,111 @@ class CoreXYKinematics:
                                                      self._motor_off)
          # Setup boundary checks
          max_velocity, max_accel = toolhead.get_max_velocity()
@@ -11943,9 +11931,9 @@
 +                                       self.limits[1][0], self.limits[1][1],
 +                                       self.limits[2][0], self.limits[2][1],
 +                                       self.__max_z_velocity, self.__max_z_accel)
-+    def note_xy_not_homed(self):
-+        self.limits[0] = (1.0, -1.0)
-+        self.limits[1] = (1.0, -1.0)
+     def note_xy_not_homed(self):
+         self.limits[0] = (1.0, -1.0)
+         self.limits[1] = (1.0, -1.0)
 +        mymovie.Py_set_corexykin_info(self.limits[0][0], self.limits[0][1],
 +                                       self.limits[1][0], self.limits[1][1],
 +                                       self.limits[2][0], self.limits[2][1],
@@ -11979,7 +11967,7 @@
      def home(self, homing_state):
          # Each axis is homed independently and in order
          for axis in homing_state.get_axes():
-@@ -64,6 +150,10 @@ class CoreXYKinematics:
+@@ -67,6 +150,10 @@ class CoreXYKinematics:
              homing_state.home_rails([rail], forcepos, homepos)
      def _motor_off(self, print_time):
          self.limits = [(1.0, -1.0)] * 3
@@ -11990,7 +11978,7 @@
      def _check_endstops(self, move):
          end_pos = move.end_pos
          for i in (0, 1, 2):
-@@ -86,7 +176,7 @@ class CoreXYKinematics:
+@@ -89,7 +176,7 @@ class CoreXYKinematics:
          self._check_endstops(move)
          z_ratio = move.move_d / abs(move.axes_d[2])
          move.limit_speed(
@@ -11999,7 +11987,7 @@
      def get_status(self, eventtime):
          axes = [a for a, (l, h) in zip("xyz", self.limits) if l <= h]
          return {
-@@ -94,6 +184,10 @@ class CoreXYKinematics:
+@@ -97,6 +184,10 @@ class CoreXYKinematics:
              'axis_minimum': self.axes_min,
              'axis_maximum': self.axes_max,
          }
@@ -12011,18 +11999,6 @@
 +            return False
  def load_kinematics(toolhead, config):
      return CoreXYKinematics(toolhead, config)
---- a/klippy/kinematics/corexz.py
-+++ b/klippy/kinematics/corexz.py
-@@ -46,6 +46,9 @@ class CoreXZKinematics:
-     def note_z_not_homed(self):
-         # Helper for Safe Z Home
-         self.limits[2] = (1.0, -1.0)
-+    def note_xy_not_homed(self):
-+        self.limits[0] = (1.0, -1.0)
-+        self.limits[1] = (1.0, -1.0)
-     def home(self, homing_state):
-         # Each axis is homed independently and in order
-         for axis in homing_state.get_axes():
 --- a/klippy/kinematics/delta.py
 +++ b/klippy/kinematics/delta.py
 @@ -65,8 +65,6 @@ class DeltaKinematics:
@@ -12205,42 +12181,6 @@
      cmd_ACTIVATE_EXTRUDER_help = "Change the active extruder"
      def cmd_ACTIVATE_EXTRUDER(self, gcmd):
          toolhead = self.printer.lookup_object('toolhead')
---- a/klippy/kinematics/hybrid_corexy.py
-+++ b/klippy/kinematics/hybrid_corexy.py
-@@ -77,6 +77,9 @@ class HybridCoreXYKinematics:
-     def note_z_not_homed(self):
-         # Helper for Safe Z Home
-         self.limits[2] = (1.0, -1.0)
-+    def note_xy_not_homed(self):
-+        self.limits[0] = (1.0, -1.0)
-+        self.limits[1] = (1.0, -1.0)
-     def _home_axis(self, homing_state, axis, rail):
-         position_min, position_max = rail.get_range()
-         hi = rail.get_homing_info()
---- a/klippy/kinematics/hybrid_corexz.py
-+++ b/klippy/kinematics/hybrid_corexz.py
-@@ -77,6 +77,9 @@ class HybridCoreXZKinematics:
-     def note_z_not_homed(self):
-         # Helper for Safe Z Home
-         self.limits[2] = (1.0, -1.0)
-+    def note_xy_not_homed(self):
-+        self.limits[0] = (1.0, -1.0)
-+        self.limits[1] = (1.0, -1.0)
-     def _home_axis(self, homing_state, axis, rail):
-         position_min, position_max = rail.get_range()
-         hi = rail.get_homing_info()
---- a/klippy/kinematics/polar.py
-+++ b/klippy/kinematics/polar.py
-@@ -54,6 +54,9 @@ class PolarKinematics:
-     def note_z_not_homed(self):
-         # Helper for Safe Z Home
-         self.limit_z = (1.0, -1.0)
-+    def note_xy_not_homed(self):
-+        self.limits[0] = (1.0, -1.0)
-+        self.limits[1] = (1.0, -1.0)
-     def _home_axis(self, homing_state, axis, rail):
-         # Determine movement
-         position_min, position_max = rail.get_range()
 --- a/klippy/klippy.py
 +++ b/klippy/klippy.py
 @@ -111,9 +111,31 @@ class Printer:

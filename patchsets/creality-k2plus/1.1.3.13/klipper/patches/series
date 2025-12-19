@@ -7,4 +7,5 @@
 0007-stepcompress-dump-on-invalid-sequence.patch
 0008-creality-configs.patch
 0009-fancy-error-messages.patch
+0010-kinematics-helper-to-clear-xy-home.patch
 9999-none-of-the-above.patch
